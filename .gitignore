@@ -1,0 +1,6 @@
+venv/
+.claude
+.env
+
+coach/__pycache__/
+prep_agent/__pycache__/
