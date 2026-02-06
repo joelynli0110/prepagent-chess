@@ -6,9 +6,12 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 
 from .storage_sqlite import SQLiteStore
-from .types import PrepConfig, PrepReport
-from .session_types import PrepSession, PrepPrefs, PlannedPrep, DrillPack
-
+from .types import (
+    PrepConfig, PrepReport, OpeningProfile, OpeningBranchStat,
+    BlunderEvent, TargetPlan, TurningPoint, Side, Severity
+)
+from .session_types import PrepSession, PlannedPrep, DrillPack
+from .prefs import PrepPrefs
 
 def _utc_now() -> str:
     return datetime.utcnow().isoformat(timespec="seconds") + "Z"
@@ -18,6 +21,62 @@ def _ensure_dataclass(cls, payload: Optional[Dict[str, Any]]):
     if payload is None:
         return None
     return cls(**payload)
+
+
+def _deserialize_report(data: Optional[Dict[str, Any]]) -> Optional[PrepReport]:
+    """Deserialize a PrepReport from a dict, handling nested dataclasses."""
+    if data is None:
+        return None
+
+    # Deserialize OpeningProfile
+    op_data = data.get("opening_profile")
+    if op_data:
+        opening_profile = OpeningProfile(
+            opening_plies=op_data["opening_plies"],
+            opponent_name=op_data.get("opponent_name"),
+            as_white_top=[OpeningBranchStat(side=Side(b["side"]), **{k: v for k, v in b.items() if k != "side"}) for b in op_data.get("as_white_top", [])],
+            as_black_vs_e4_top=[OpeningBranchStat(side=Side(b["side"]), **{k: v for k, v in b.items() if k != "side"}) for b in op_data.get("as_black_vs_e4_top", [])],
+            as_black_vs_d4_top=[OpeningBranchStat(side=Side(b["side"]), **{k: v for k, v in b.items() if k != "side"}) for b in op_data.get("as_black_vs_d4_top", [])],
+        )
+    else:
+        opening_profile = OpeningProfile(opening_plies=8)
+
+    # Deserialize blunders
+    blunders = []
+    for b in data.get("blunders", []):
+        blunders.append(BlunderEvent(
+            opponent_side=Side(b["opponent_side"]),
+            severity=Severity(b["severity"]),
+            **{k: v for k, v in b.items() if k not in ("opponent_side", "severity")}
+        ))
+
+    # Deserialize targets
+    targets = []
+    for t in data.get("targets", []):
+        likely_openings = [
+            OpeningBranchStat(side=Side(o["side"]), **{k: v for k, v in o.items() if k != "side"})
+            for o in t.get("likely_openings", [])
+        ]
+        turning_points = [
+            TurningPoint(severity=Severity(tp["severity"]), **{k: v for k, v in tp.items() if k != "severity"})
+            for tp in t.get("turning_points", [])
+        ]
+        targets.append(TargetPlan(
+            opponent_side=Side(t["opponent_side"]),
+            headline=t["headline"],
+            likely_openings=likely_openings,
+            turning_points=turning_points,
+        ))
+
+    return PrepReport(
+        created_at=data["created_at"],
+        games_ingested=data["games_ingested"],
+        opening_profile=opening_profile,
+        blunders=blunders,
+        targets=targets,
+        markdown_report=data.get("markdown_report", ""),
+        opponent_name=data.get("opponent_name"),
+    )
 
 
 class SessionService:
@@ -69,7 +128,7 @@ class SessionService:
         prefs = PrepPrefs(**meta["prefs"])
         artifacts = self.store.get_all_artifacts(session_id)
 
-        report = _ensure_dataclass(PrepReport, artifacts["report"])
+        report = _deserialize_report(artifacts["report"])
         planned = _ensure_dataclass(PlannedPrep, artifacts["planned"])
         drills = _ensure_dataclass(DrillPack, artifacts["drills"])
 

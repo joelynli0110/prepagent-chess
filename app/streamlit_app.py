@@ -1,98 +1,99 @@
-import os
 import streamlit as st
-from dotenv import load_dotenv
+from prep_agent.prefs import PrepPrefs, RiskProfile, TimeBudget
+from prep_agent.planner_v1 import build_simple_plan
+from prep_agent.session_service import SessionService
+from prep_agent.storage_sqlite import SQLiteStore
 
-from prep_agent.types import PrepConfig
-from prep_agent.pipeline import run_prep
+svc = SessionService(SQLiteStore("data/prep.db"))
 
-load_dotenv()
+def prefs_form(default: PrepPrefs) -> PrepPrefs:
+    st.subheader("Prep Preferences")
 
-st.set_page_config(page_title="PrepAgent Chess - Opponent Prep", layout="wide")
-st.title("PrepAgent Chess — Opponent Preparation Agent (Sprint 1)")
+    focus = st.selectbox("Focus", ["both", "opp_as_white", "opp_as_black"], index=["both","opp_as_white","opp_as_black"].index(default.focus))
+    risk = st.selectbox("Risk profile", [r.value for r in RiskProfile], index=[r.value for r in RiskProfile].index(default.risk.value))
+    budget = st.selectbox("Time budget", [t.value for t in TimeBudget], index=[t.value for t in TimeBudget].index(default.time_budget.value))
 
-# ===== UI Inputs =====
-opponent_name = st.text_input("Opponent name (optional, used to identify if opponent is White or Black in PGN)", value="")
+    as_white = st.text_input("As White first moves (comma-separated)", value=", ".join(default.as_white_first_moves))
+    vs_e4 = st.text_input("As Black vs e4 (comma-separated)", value=", ".join(default.as_black_vs_e4))
+    vs_d4 = st.text_input("As Black vs d4 (comma-separated)", value=", ".join(default.as_black_vs_d4))
 
-default_stockfish = os.getenv("STOCKFISH_PATH", "stockfish")
-stockfish_path = st.text_input(
-    "Stockfish path (on Windows, provide full path to .exe)",
-    value=default_stockfish,
+    banned = st.text_input("Banned branch keywords (comma-separated)", value=", ".join(default.banned_branch_keywords))
+
+    max_targets = st.slider("Max targets per side", 1, 5, int(default.max_targets_per_side))
+    max_tp = st.slider("Max turning points per target", 1, 20, int(default.max_turning_points_per_side))
+
+    notes = st.text_area("Notes", value=default.notes, height=80)
+
+    prefs = PrepPrefs(
+        focus=focus,
+        risk=RiskProfile(risk),
+        time_budget=TimeBudget(budget),
+        as_white_first_moves=[x.strip() for x in as_white.split(",") if x.strip()],
+        as_black_vs_e4=[x.strip() for x in vs_e4.split(",") if x.strip()],
+        as_black_vs_d4=[x.strip() for x in vs_d4.split(",") if x.strip()],
+        banned_branch_keywords=[x.strip() for x in banned.split(",") if x.strip()],
+        max_targets_per_side=max_targets,
+        max_turning_points_per_side=max_tp,
+        notes=notes,
+    ).normalize()
+
+    ok, errors = prefs.validate()
+    if not ok:
+        for e in errors:
+            st.error(e)
+
+    return prefs
+
+# Session selector in sidebar
+st.sidebar.header("Session")
+sessions = svc.list_sessions(limit=20)
+
+if not sessions:
+    st.sidebar.warning("No sessions found. Create one using the prep agent first.")
+    st.stop()
+
+session_ids = [s["session_id"] for s in sessions]
+session_options = {s["session_id"]: f"{s.get('opponent_name', 'Unknown')} ({s['session_id'][:8]})" for s in sessions}
+
+# Clear stale session_id if it no longer exists
+if st.session_state.get("session_id") not in session_ids:
+    st.session_state["session_id"] = session_ids[0]
+
+selected = st.sidebar.selectbox(
+    "Select session",
+    options=session_ids,
+    format_func=lambda x: session_options[x],
+    index=session_ids.index(st.session_state["session_id"])
 )
+st.session_state["session_id"] = selected
 
-engine_movetime = st.slider("Engine analysis time per move (ms)", 50, 1000, 150, step=50)
-opening_plies = st.slider("Opening plies to analyze (first N half-moves)", 4, 16, 8, step=2)
+session = svc.load_session(st.session_state["session_id"])
+if not session or not session.report:
+    st.warning("Load a session with a report first (run Sprint 1 ingest).")
+else:
+    prefs = prefs_form(session.prefs)
 
-uploaded = st.file_uploader("Upload opponent PGN files (multiple allowed)", type=["pgn"], accept_multiple_files=True)
+    colA, colB = st.columns(2)
 
-run_btn = st.button("Run Opponent Preparation Analysis")
+    with colA:
+        if st.button("Save preferences"):
+            svc.update_prefs(session.session_id, prefs)
+            st.success("Preferences saved.")
 
-# ===== Run Analysis =====
-if run_btn:
-    if not uploaded:
-        st.error("Please upload at least one PGN file first.")
-        st.stop()
+    with colB:
+        if st.button("Build plan (v1)"):
+            plan = build_simple_plan(session.report, prefs)
+            # optionally store as artifact
+            # svc.save_planned(session.session_id, plan)  # only if you decide plan is a dataclass JSON-friendly
+            st.session_state["current_plan"] = plan
+            st.success("Plan built.")
 
-    # Read PGN text
-    pgn_texts = []
-    for f in uploaded:
-        pgn_texts.append(f.read().decode("utf-8", errors="ignore"))
-
-    cfg = PrepConfig(
-        stockfish_path=stockfish_path,
-        engine_movetime_ms=engine_movetime,
-        opening_plies=opening_plies,
-        # You can also adjust thresholds here:
-        # mistake_drop_cp=80,
-        # blunder_drop_cp=200,
-        # turning_points_per_side=10,
-    )
-
-    with st.spinner("Analyzing: Importing PGN → Opening profile → Engine finding mistakes → Generating report..."):
-        report = run_prep(pgn_texts, opponent_name=opponent_name.strip() or None, cfg=cfg)
-
-    st.success(f"Done! Analyzed {report.games_ingested} games.")
-
-    # ===== Display Results =====
-    col1, col2 = st.columns([1, 1])
-
-    with col1:
-        st.subheader("Opening Profile (Opponent's Opening Preferences)")
-        op = report.opening_profile
-
-        st.markdown("### Opponent as White - Top Branches")
-        for b in op.as_white_top[:10]:
-            st.write(f"- {' '.join(b.moves_san)} | games={b.games} | score={b.score:.2f}")
-
-        st.markdown("### Opponent as Black vs 1.e4 - Top Branches")
-        for b in op.as_black_vs_e4_top[:10]:
-            st.write(f"- {' '.join(b.moves_san)} | games={b.games} | score={b.score:.2f}")
-
-        st.markdown("### Opponent as Black vs 1.d4 - Top Branches")
-        for b in op.as_black_vs_d4_top[:10]:
-            st.write(f"- {' '.join(b.moves_san)} | games={b.games} | score={b.score:.2f}")
-
-    with col2:
-        st.subheader("Top Blunders (Opponent's Biggest Mistakes)")
-        for b in report.blunders[:15]:
-            st.write(
-                f"- [{b.opponent_side}] ply {b.ply} | {b.played_move_san} "
-                f"| drop≈{b.drop_cp_equiv/100:.1f} | opening: {b.opening_key}"
-            )
-
-    st.subheader("Target Plans (Training Packs / Key Turning Points)")
-    for t in report.targets:
-        st.markdown(f"### {t.headline}")
-        if t.likely_openings:
-            st.markdown("**Likely branches:**")
-            for br in t.likely_openings:
-                st.write(f"- {' '.join(br.moves_san)} (games={br.games}, score={br.score:.2f})")
-        if t.turning_points:
-            st.markdown("**Turning points to drill:**")
-            for i, tp in enumerate(t.turning_points[:10], 1):
-                st.write(
-                    f"{i}. {tp.title} | opponent played {tp.opponent_mistake_move_san} "
-                    f"| drop≈{tp.drop_cp_equiv/100:.1f} | punish={tp.punish_move_uci}"
-                )
-
-    st.subheader("Markdown Report (Copy/Export)")
-    st.markdown(report.markdown_report)
+    plan = st.session_state.get("current_plan", None)
+    if plan:
+        st.subheader("Targets")
+        for t in plan.targets:
+            st.markdown(f"### {t.opponent_side} — {' '.join(t.branch.moves_san)}  (games={t.branch.games}, score={t.branch.score:.2f})")
+            if not t.turning_points:
+                st.write("_No turning points found in this branch yet._")
+            for tp in t.turning_points[:10]:
+                st.write(f"- {tp.title}: opponent played {tp.opponent_mistake_move_san} (drop≈{tp.drop_cp_equiv/100:.1f}) punish={tp.punish_move_uci}")

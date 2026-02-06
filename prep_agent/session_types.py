@@ -5,40 +5,7 @@ from typing import Any, Dict, Optional, Literal, List
 from datetime import datetime
 
 from .types import PrepConfig, PrepReport, OpeningBranchStat, TurningPoint, Side
-
-class RiskProfile(str, Enum):
-    SOLID = "solid"
-    PRACTICAL = "practical"
-    SHARP = "sharp"
-
-class TimeBudget(str, Enum):
-    QUICK = "quick"
-    NORMAL = "normal"
-    DEEP = "deep"
-
-@dataclass
-class PrepPrefs:
-    """
-    User constraints/preferences that shape the agent plan.
-    Keep this minimal for sprint 2
-    """
-    focus: Literal["opening", "middlegame", "endgame"] = "opening"
-    risk: RiskProfile = RiskProfile.PRACTICAL
-    time_budget: TimeBudget = TimeBudget.NORMAL
-
-    # Your repertoire constraints
-    as_white: List[str] = field(default_factory=lambda: ["e4", "d4"])
-    as_black_vs_e4: List[str] = field(default_factory=lambda: ["c5", "e5"])
-    as_black_vs_d4: List[str] = field(default_factory=lambda: ["Nf6", "d5"])
-
-    # Hard constraints / custom filters
-    banned_branches_contains: List[str] = field(default_factory=list) # e.g. ["Sicilian Defense", "King's Indian Defense"]
-    banned_moves_san: List[str] = field(default_factory=list) # e.g. ["f4", "h4", "Ng5"] rarely used; optional
-    max_targets_per_side: int = 3
-    max_turning_points_per_side: int = 10
-
-    # Optional future: prefer quiet lines, endgame-friendly, etc.
-    notes: str = ""
+from .prefs import PrepPrefs, RiskProfile, TimeBudget
 
 
 @dataclass
