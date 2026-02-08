@@ -175,4 +175,5 @@ class SQLiteStore:
             "report": self.get_artifact(session_id, "report"),
             "planned": self.get_artifact(session_id, "planned"),
             "drills": self.get_artifact(session_id, "drills"),
+            "coaching": self.get_artifact(session_id, "coaching"),
         }

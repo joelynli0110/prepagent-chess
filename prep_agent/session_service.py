@@ -10,7 +10,7 @@ from .types import (
     PrepConfig, PrepReport, OpeningProfile, OpeningBranchStat,
     BlunderEvent, TargetPlan, TurningPoint, Side, Severity
 )
-from .session_types import PrepSession, PlannedPrep, DrillPack
+from .session_types import PrepSession, PlannedPrep, DrillPack, CoachingAdvice
 from .prefs import PrepPrefs
 
 def _utc_now() -> str:
@@ -131,6 +131,7 @@ class SessionService:
         report = _deserialize_report(artifacts["report"])
         planned = _ensure_dataclass(PlannedPrep, artifacts["planned"])
         drills = _ensure_dataclass(DrillPack, artifacts["drills"])
+        coaching = _ensure_dataclass(CoachingAdvice, artifacts["coaching"])
 
         return PrepSession(
             session_id=meta["session_id"],
@@ -141,6 +142,7 @@ class SessionService:
             report=report,
             planned=planned,
             drills=drills,
+            coaching=coaching,
             activity_log=meta["activity_log"],
         )
 
@@ -194,6 +196,10 @@ class SessionService:
     def save_drills(self, session_id: str, drills: DrillPack) -> None:
         self.store.upsert_artifact(session_id, "drills", drills)
         self._log(session_id, "saved drills")
+
+    def save_coaching(self, session_id: str, coaching: CoachingAdvice) -> None:
+        self.store.upsert_artifact(session_id, "coaching", coaching)
+        self._log(session_id, "saved coaching advice")
 
     # ---------- utility ----------
     def _log(self, session_id: str, message: str) -> None:

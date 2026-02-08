@@ -51,6 +51,10 @@ class PrepState(TypedDict, total=False):
     status: str
     enable_coach: bool
 
+    # --- Ollama coach config ---
+    coach_model: str
+    ollama_base_url: str
+
 
 # ── 2. Node functions ─────────────────────────────────────────────
 
@@ -139,22 +143,50 @@ def plan_node(state: PrepState) -> dict:
 
 def coach_node(state: PrepState) -> dict:
     """LLM generates natural-language coaching advice for the plan."""
-    from langchain_openai import ChatOpenAI
+    from langchain_community.chat_models import ChatOllama
 
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3)
+    llm = ChatOllama(
+        model=state.get("coach_model", "mistral"),
+        base_url=state.get("ollama_base_url", "http://localhost:11434"),
+        temperature=0.3,
+    )
     planned = state["planned"]
     opp = state.get("opponent_name") or "the opponent"
 
-    targets_text = "\n".join(
-        f"- {t.headline}" for t in planned.chosen_targets
-    )
+    # Build detailed target descriptions with score breakdowns
+    target_lines = []
+    for i, t in enumerate(planned.chosen_targets, 1):
+        line = f"{i}. {t.headline}"
+        # Add critical position details if available
+        if t.critical_positions:
+            for cp in t.critical_positions[:3]:
+                line += (
+                    f"\n   - Turning point: opponent played {cp.opoonent_mistake_move_san}"
+                    f" (drop ~{cp.drop_cp_equiv / 100:.1f} pawns), punish with {cp.punish_move_uci}"
+                )
+        target_lines.append(line)
+    targets_text = "\n".join(target_lines)
+
+    # Add score breakdowns from ranked branches
+    score_lines = []
+    for bs in planned.ranked_branches[:5]:
+        score_lines.append(
+            f"- {' '.join(bs.branch_moves_san)}: "
+            f"total={bs.total_score:.2f} "
+            f"(freq={bs.frequency_score:.2f}, weakness={bs.weakness_score:.2f}, fit={bs.fit_score:.2f}), "
+            f"blunder_rate={bs.blunder_rate:.1%}, avg_drop={bs.avg_drop_cp:.0f}cp"
+        )
+    scores_text = "\n".join(score_lines) if score_lines else "No detailed scores available."
+
     prompt = (
         f"You are an experienced chess coach. Your student is preparing "
         f"against {opp}.\n\n"
-        f"Chosen prep targets:\n{targets_text}\n\n"
+        f"## Chosen prep targets\n{targets_text}\n\n"
+        f"## Branch scoring breakdown\n{scores_text}\n\n"
         f"For each target give 2-3 sentences of practical advice: "
         f"typical middlegame plans, pawn structures to aim for, and "
-        f"how to punish the opponent's habitual mistakes."
+        f"how to punish the opponent's habitual mistakes. "
+        f"Reference specific blunder rates and score data where relevant."
     )
     response = llm.invoke([HumanMessage(content=prompt)])
     return {
@@ -207,6 +239,8 @@ def run_prep_graph(
     cfg: PrepConfig,
     prefs: PrepPrefs,
     enable_coach: bool = False,
+    coach_model: str = "mistral",
+    ollama_base_url: str = "http://localhost:11434",
 ) -> PrepState:
     """Run the full pipeline end-to-end and return final state."""
     app = build_prep_graph()
@@ -225,6 +259,8 @@ def run_prep_graph(
         "messages": [HumanMessage(content=f"Prepare against {opponent_name or 'opponent'}")],
         "status": "start",
         "enable_coach": enable_coach,
+        "coach_model": coach_model,
+        "ollama_base_url": ollama_base_url,
     }
     return app.invoke(initial)
 
@@ -235,6 +271,8 @@ def stream_prep_graph(
     cfg: PrepConfig,
     prefs: PrepPrefs,
     enable_coach: bool = False,
+    coach_model: str = "mistral",
+    ollama_base_url: str = "http://localhost:11434",
 ):
     """Yield (node_name, output) tuples for real-time UI updates."""
     app = build_prep_graph()
@@ -253,6 +291,8 @@ def stream_prep_graph(
         "messages": [HumanMessage(content=f"Prepare against {opponent_name or 'opponent'}")],
         "status": "start",
         "enable_coach": enable_coach,
+        "coach_model": coach_model,
+        "ollama_base_url": ollama_base_url,
     }
     for event in app.stream(initial):
         for node_name, output in event.items():

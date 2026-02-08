@@ -3,6 +3,7 @@ from prep_agent.prefs import PrepPrefs, RiskProfile, TimeBudget
 from prep_agent.planner_v1 import build_simple_plan
 from prep_agent.session_service import SessionService
 from prep_agent.storage_sqlite import SQLiteStore
+from prep_agent.coach import generate_coaching
 
 svc = SessionService(SQLiteStore("data/prep.db"))
 
@@ -97,3 +98,36 @@ else:
                 st.write("_No turning points found in this branch yet._")
             for tp in t.turning_points[:10]:
                 st.write(f"- {tp.title}: opponent played {tp.opponent_mistake_move_san} (drop≈{tp.drop_cp_equiv/100:.1f}) punish={tp.punish_move_uci}")
+
+    # ── Coaching section ──────────────────────────────────────────
+    st.divider()
+    st.subheader("LLM Coach")
+
+    coach_model = st.text_input("Ollama model", value="mistral", key="coach_model_input")
+    ollama_url = st.text_input("Ollama base URL", value="http://localhost:11434", key="ollama_url_input")
+
+    # Show existing coaching if already saved
+    if session.coaching:
+        st.markdown(f"**Saved coaching** (model: `{session.coaching.coach_model}`, "
+                    f"created: {session.coaching.created_at})")
+        st.markdown(session.coaching.advice_text)
+
+    # Generate new coaching — requires a planned prep
+    can_coach = session.planned is not None
+    if not can_coach:
+        st.info("Build a plan first to enable coaching.")
+
+    if st.button("Generate coaching advice", disabled=not can_coach):
+        with st.spinner("Calling Ollama..."):
+            try:
+                advice = generate_coaching(
+                    planned=session.planned,
+                    opponent_name=session.opponent_name or "the opponent",
+                    model=coach_model,
+                    base_url=ollama_url,
+                )
+                svc.save_coaching(session.session_id, advice)
+                st.success("Coaching advice generated and saved.")
+                st.markdown(advice.advice_text)
+            except Exception as e:
+                st.error(f"Coaching failed: {e}")

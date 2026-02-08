@@ -95,6 +95,15 @@ class DrillPack:
 
 
 @dataclass
+class CoachingAdvice:
+    """LLM-generated coaching advice for a prep plan."""
+    created_at: str
+    coach_model: str          # e.g. "mistral", "llama3"
+    advice_text: str
+    targets_addressed: List[str]  # headlines of targets this covers
+
+
+@dataclass
 class PrepSession:
     """
     Persisted session container.
@@ -110,6 +119,7 @@ class PrepSession:
     report: Optional[PrepReport] = None
     planned: Optional[PlannedPrep] = None
     drills: Optional[DrillPack] = None
+    coaching: Optional[CoachingAdvice] = None
 
     # simple audit trail
     activity_log: List[str] = field(default_factory=list)
