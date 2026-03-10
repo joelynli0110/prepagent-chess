@@ -16,7 +16,7 @@ def infer_phase(board: chess.Board, ply: int) -> Phase:
         for piece in [chess.ROOK, chess.BISHOP, chess.KNIGHT]
     )
     if ply <= 20:
-        return Phase.OPENING
+        return Phase.opening
     if queens == 0 and minor_and_rooks <= 4:
         return Phase.ENDGAME
     return Phase.MIDDLEGAME
@@ -55,14 +55,14 @@ def parse_single_game(game: chess.pgn.Game, raw_pgn_text: str) -> dict[str, Any]
         move = next_node.move
         fen_before = board.fen()
         san = board.san(move)
-        side_to_move = Side.WHITE if board.turn == chess.WHITE else Side.BLACK
+        side_to_move = Side.white if board.turn == chess.WHITE else Side.black
         board.push(move)
         ply += 1
         fen_after = board.fen()
 
         moves.append(
             {
-                "fullmove_number": board.fullmove_number if side_to_move == Side.BLACK else board.fullmove_number - 1,
+                "fullmove_number": board.fullmove_number if side_to_move == Side.black else board.fullmove_number - 1,
                 "side_to_move": side_to_move,
                 "san": san,
                 "uci": move.uci(),

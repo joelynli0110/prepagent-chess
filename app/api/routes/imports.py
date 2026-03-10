@@ -28,8 +28,8 @@ def import_pgn(
 
     job = Job(
         opponent_space_id=opponent_id,
-        job_type=JobType.IMPORT_PGN,
-        status=JobStatus.QUEUED,
+        job_type=JobType.import_pgn,
+        status=JobStatus.queued,
         payload={"filename": file.filename},
     )
     db.add(job)

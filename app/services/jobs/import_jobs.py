@@ -6,7 +6,7 @@ from app.services.parsing.pgn_parser import parse_pgn_text
 
 
 def process_pgn_import_job(db: Session, job: Job, opponent_space_id: str, pgn_text: str) -> None:
-    job.status = JobStatus.RUNNING
+    job.status = JobStatus.running
     db.commit()
 
     parsed_games = parse_pgn_text(pgn_text)
@@ -48,6 +48,6 @@ def process_pgn_import_job(db: Session, job: Job, opponent_space_id: str, pgn_te
 
         imported_ids.append(game.id)
 
-    job.status = JobStatus.COMPLETED
+    job.status = JobStatus.completed
     job.result = {"imported_games": len(imported_ids), "game_ids": imported_ids}
     db.commit()
