@@ -63,3 +63,47 @@ class AnalysisService:
 
         db.commit()
         return analyzed_count
+    
+    def analyze_opponent(
+        self,
+        db: Session,
+        opponent_id: str,
+        depth: int = 10,
+        max_games: int | None = None,
+        max_plies: int | None = None,
+        only_missing: bool = True,
+    ) -> tuple[int, int]:
+        games = list(
+            db.scalars(
+                select(Game)
+                .where(Game.opponent_space_id == opponent_id)
+                .order_by(Game.date_played.desc().nullslast(), Game.created_at.desc())
+            ).all()
+        )
+
+        if max_games is not None:
+            games = games[:max_games]
+
+        analyzed_games = 0
+        analyzed_positions = 0
+
+        for game in games:
+            if only_missing:
+                existing = db.scalar(
+                    select(EngineAnalysis.id)
+                    .where(EngineAnalysis.game_id == game.id)
+                    .limit(1)
+                )
+                if existing is not None:
+                    continue
+
+            count = self.analyze_game(
+                db=db,
+                game_id=game.id,
+                depth=depth,
+                max_plies=max_plies,
+            )
+            analyzed_games += 1
+            analyzed_positions += count
+
+        return analyzed_games, analyzed_positions
