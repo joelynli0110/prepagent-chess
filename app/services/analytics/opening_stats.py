@@ -7,7 +7,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import EngineAnalysis, Game, MoveFact, Side
+from app.db.models import EngineAnalysis, Game
 
 
 class OpeningStatsService:
@@ -16,50 +16,47 @@ class OpeningStatsService:
             db.scalars(
                 select(Game)
                 .where(Game.opponent_space_id == opponent_id)
+                .where(Game.opponent_side.is_not(None))
                 .order_by(Game.date_played.desc().nullslast(), Game.created_at.desc())
             ).all()
         )
 
-        buckets: dict[tuple[Optional[str], Optional[str], Side], dict] = {}
+        buckets: dict[tuple, dict] = {}
 
         for game in games:
-            for color in (Side.white, Side.black):
-                # In a single-opponent space, you may later infer which side belongs to the target opponent.
-                # For now we expose both sides as repertoire buckets from stored games.
-                key = (game.opening_name, game.eco, color)
-                if key not in buckets:
-                    buckets[key] = {
-                        "opening_name": game.opening_name,
-                        "eco": game.eco,
-                        "color": color,
-                        "games_count": 0,
-                        "wins": 0,
-                        "draws": 0,
-                        "losses": 0,
-                        "last_seen": None,
-                        "_game_ids": [],
-                    }
+            key = (game.opening_name, game.eco, game.opponent_side)
+            if key not in buckets:
+                buckets[key] = {
+                    "opening_name": game.opening_name,
+                    "eco": game.eco,
+                    "color": game.opponent_side,
+                    "games_count": 0,
+                    "wins": 0,
+                    "draws": 0,
+                    "losses": 0,
+                    "last_seen": None,
+                    "_game_ids": [],
+                }
 
-                bucket = buckets[key]
-                bucket["games_count"] += 1
-                bucket["_game_ids"].append(game.id)
+            bucket = buckets[key]
+            bucket["games_count"] += 1
+            bucket["_game_ids"].append(game.id)
 
-                if game.date_played and (bucket["last_seen"] is None or game.date_played > bucket["last_seen"]):
-                    bucket["last_seen"] = game.date_played
+            if game.date_played and (bucket["last_seen"] is None or game.date_played > bucket["last_seen"]):
+                bucket["last_seen"] = game.date_played
 
-                result = game.result
-                if result == "1/2-1/2":
-                    bucket["draws"] += 1
-                elif result == "1-0":
-                    if color == Side.white:
-                        bucket["wins"] += 1
-                    else:
-                        bucket["losses"] += 1
-                elif result == "0-1":
-                    if color == Side.black:
-                        bucket["wins"] += 1
-                    else:
-                        bucket["losses"] += 1
+            if game.result == "1/2-1/2":
+                bucket["draws"] += 1
+            elif game.result == "1-0":
+                if game.opponent_side.value == "white":
+                    bucket["wins"] += 1
+                else:
+                    bucket["losses"] += 1
+            elif game.result == "0-1":
+                if game.opponent_side.value == "black":
+                    bucket["wins"] += 1
+                else:
+                    bucket["losses"] += 1
 
         game_ids = [g.id for g in games]
         analyses = []
@@ -71,7 +68,6 @@ class OpeningStatsService:
                 ).all()
             )
 
-        game_by_id = {g.id: g for g in games}
         cpl_map: dict[str, list[int]] = defaultdict(list)
         blunder_map: dict[str, int] = defaultdict(int)
         move_count_map: dict[str, int] = defaultdict(int)

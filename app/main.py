@@ -8,6 +8,7 @@ from app.api.routes.jobs import router as jobs_router
 from app.api.routes.opponents import router as opponents_router
 from app.db.base import Base
 from app.db.session import engine
+from fastapi.middleware.cors import CORSMiddleware
 
 
 def create_app() -> FastAPI:
@@ -23,3 +24,11 @@ def create_app() -> FastAPI:
 
 app = create_app()
 Base.metadata.create_all(bind=engine)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)

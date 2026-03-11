@@ -14,6 +14,7 @@ class BlunderPatternsService:
             db.scalars(
                 select(Game)
                 .where(Game.opponent_space_id == opponent_id)
+                .where(Game.opponent_side.is_not(None))
             ).all()
         )
         if not games:
@@ -26,7 +27,6 @@ class BlunderPatternsService:
             db.scalars(
                 select(EngineAnalysis)
                 .where(EngineAnalysis.game_id.in_(game_ids))
-                .where(EngineAnalysis.classification == "blunder")
                 .order_by(EngineAnalysis.game_id.asc(), EngineAnalysis.ply.asc())
             ).all()
         )
@@ -54,16 +54,23 @@ class BlunderPatternsService:
         })
 
         for analysis in analyses:
+            if not analysis.classification or analysis.classification.value != "blunder":
+                continue
+
             game = game_by_id[analysis.game_id]
             move = move_by_key.get((analysis.game_id, analysis.ply))
-            phase = move.phase if move else None
-            side = move.side_to_move if move else None
-            key = (game.opening_name, phase, side)
+            if not move:
+                continue
 
+            # Keep only the opponent's own moves.
+            if game.opponent_side is None or move.side_to_move != game.opponent_side:
+                continue
+
+            key = (game.opening_name, move.phase, game.opponent_side)
             bucket = buckets[key]
             bucket["opening_name"] = game.opening_name
-            bucket["phase"] = phase
-            bucket["side"] = side
+            bucket["phase"] = move.phase
+            bucket["side"] = game.opponent_side
             bucket["blunder_count"] += 1
             bucket["game_ids"].add(game.id)
             if bucket["sample_game_id"] is None:

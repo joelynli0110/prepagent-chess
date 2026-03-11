@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 
 from app.db.models import Game, Job, JobStatus, MoveFact
+from app.services.opponents.identity import OpponentIdentityService
 from app.services.parsing.pgn_parser import parse_pgn_text
 
 
@@ -12,7 +13,16 @@ def process_pgn_import_job(db: Session, job: Job, opponent_space_id: str, pgn_te
     parsed_games = parse_pgn_text(pgn_text)
     imported_ids: list[str] = []
 
+    opponent = job.opponent_space
+    identity_service = OpponentIdentityService()
+
     for parsed in parsed_games:
+        identity = identity_service.infer_side(
+            canonical_name=opponent.canonical_name,
+            white_name=parsed["white_name"],
+            black_name=parsed["black_name"],
+        )
+
         game = Game(
             opponent_space_id=opponent_space_id,
             source=parsed["source"],
@@ -26,6 +36,8 @@ def process_pgn_import_job(db: Session, job: Job, opponent_space_id: str, pgn_te
             opening_name=parsed["opening_name"],
             pgn_text=parsed["pgn_text"],
             total_plies=len(parsed["moves"]),
+            opponent_name_in_game=identity.matched_name,
+            opponent_side=identity.opponent_side,
         )
         db.add(game)
         db.flush()
