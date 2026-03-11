@@ -1,5 +1,8 @@
 from pydantic import BaseModel
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class Settings(BaseModel):
    app_env: str = os.getenv("APP_ENV", "dev")

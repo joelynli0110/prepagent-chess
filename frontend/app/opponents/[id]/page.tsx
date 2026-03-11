@@ -1,22 +1,13 @@
 import Link from "next/link";
-import { apiGet, apiPost } from "@/lib/api";
+import { apiGet } from "@/lib/api";
 import {
   BlunderSummary,
   Game,
   OpeningStat,
   OpponentSpace,
 } from "@/lib/types";
-
-async function analyzeOpponent(opponentId: string) {
-  "use server";
-
-  await apiPost(`/opponents/${opponentId}/analyze`, {
-    depth: 10,
-    max_games: 20,
-    max_plies: 40,
-    only_missing: true,
-  });
-}
+import { analyzeOpponentAction } from "./actions";
+import { UploadPgnForm } from "./UploadPgnForm";
 
 export default async function OpponentDetailPage({
   params,
@@ -45,7 +36,7 @@ export default async function OpponentDetailPage({
           ) : null}
         </div>
 
-        <form action={analyzeOpponent.bind(null, id)}>
+        <form action={analyzeOpponentAction.bind(null, id)}>
           <button
             type="submit"
             className="rounded-xl border px-4 py-2 text-sm hover:bg-gray-50"
@@ -54,6 +45,8 @@ export default async function OpponentDetailPage({
           </button>
         </form>
       </section>
+
+      <UploadPgnForm opponentId={id} />
 
       <section className="grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border p-4">
@@ -99,9 +92,7 @@ export default async function OpponentDetailPage({
                     <td className="p-3">{row.eco ?? "-"}</td>
                     <td className="p-3">{row.color}</td>
                     <td className="p-3">{row.games_count}</td>
-                    <td className="p-3">
-                      {row.wins}-{row.draws}-{row.losses}
-                    </td>
+                    <td className="p-3">{row.wins}-{row.draws}-{row.losses}</td>
                     <td className="p-3">{row.avg_centipawn_loss ?? "-"}</td>
                     <td className="p-3">{row.blunder_rate}</td>
                   </tr>
@@ -166,7 +157,7 @@ export default async function OpponentDetailPage({
         <div className="space-y-2">
           {games.length === 0 ? (
             <div className="rounded-2xl border p-4 text-sm text-gray-500">
-              No games yet. Import a PGN from the backend first.
+              No games yet. Upload a PGN above.
             </div>
           ) : (
             games.slice(0, 25).map((game) => (

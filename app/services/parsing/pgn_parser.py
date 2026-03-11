@@ -18,8 +18,8 @@ def infer_phase(board: chess.Board, ply: int) -> Phase:
     if ply <= 20:
         return Phase.opening
     if queens == 0 and minor_and_rooks <= 4:
-        return Phase.ENDGAME
-    return Phase.MIDDLEGAME
+        return Phase.endgame
+    return Phase.middlegame
 
 
 

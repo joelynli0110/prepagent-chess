@@ -1,13 +1,28 @@
-import { apiGet, apiPost } from "@/lib/api";
+import { redirect } from "next/navigation";
+import { apiGet } from "@/lib/api";
 import { EngineAnalysis, Game, MoveFact } from "@/lib/types";
 
-async function analyzeGame(gameId: string) {
+async function analyzeGame(gameId: string, opponentId: string) {
   "use server";
 
-  await apiPost(`/games/${gameId}/analyze`, {
-    depth: 10,
-    max_plies: 40,
+  const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
+
+  const res = await fetch(`${API_BASE}/games/${gameId}/analyze`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      depth: 10,
+      max_plies: 40,
+    }),
+    cache: "no-store",
   });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Analyze game failed: ${res.status} ${text}`);
+  }
+
+  redirect(`/opponents/${opponentId}/games/${gameId}`);
 }
 
 export default async function GameDetailPage({
@@ -15,7 +30,7 @@ export default async function GameDetailPage({
 }: {
   params: Promise<{ id: string; gameId: string }>;
 }) {
-  const { gameId } = await params;
+  const { id, gameId } = await params;
 
   const [game, moves, analysis] = await Promise.all([
     apiGet<Game>(`/games/${gameId}`),
@@ -38,7 +53,7 @@ export default async function GameDetailPage({
           </p>
         </div>
 
-        <form action={analyzeGame.bind(null, gameId)}>
+        <form action={analyzeGame.bind(null, gameId, id)}>
           <button
             type="submit"
             className="rounded-xl border px-4 py-2 text-sm hover:bg-gray-50"
@@ -55,9 +70,7 @@ export default async function GameDetailPage({
         </div>
         <div className="rounded-2xl border p-4">
           <div className="text-sm text-gray-500">Opening</div>
-          <div className="mt-1 text-xl font-semibold">
-            {game.opening_name ?? "-"}
-          </div>
+          <div className="mt-1 text-xl font-semibold">{game.opening_name ?? "-"}</div>
         </div>
         <div className="rounded-2xl border p-4">
           <div className="text-sm text-gray-500">Plies</div>
@@ -99,10 +112,7 @@ export default async function GameDetailPage({
                     a?.classification === "blunder";
 
                   return (
-                    <tr
-                      key={move.id}
-                      className={`border-t ${isBad ? "bg-red-50" : ""}`}
-                    >
+                    <tr key={move.id} className={`border-t ${isBad ? "bg-red-50" : ""}`}>
                       <td className="p-3">{move.ply}</td>
                       <td className="p-3 font-medium">{move.san}</td>
                       <td className="p-3">{move.side_to_move}</td>

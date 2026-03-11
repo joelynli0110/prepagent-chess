@@ -62,6 +62,7 @@ class AnalysisService:
             analyzed_count += 1
 
         db.commit()
+        print(f"Returning analyzed_count={analyzed_count}")
         return analyzed_count
     
     def analyze_opponent(

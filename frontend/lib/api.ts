@@ -14,8 +14,10 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
+
   if (!res.ok) {
-    throw new Error(`POST ${path} failed: ${res.status}`);
+    const text = await res.text();
+    throw new Error(`POST ${path} failed: ${res.status} ${text}`);
   }
   return res.json();
 }
@@ -28,8 +30,10 @@ export async function apiPostFile<T>(path: string, file: File): Promise<T> {
     method: "POST",
     body: form,
   });
+
   if (!res.ok) {
-    throw new Error(`POST file ${path} failed: ${res.status}`);
+    const text = await res.text();
+    throw new Error(`POST file ${path} failed: ${res.status} ${text}`);
   }
   return res.json();
 }
