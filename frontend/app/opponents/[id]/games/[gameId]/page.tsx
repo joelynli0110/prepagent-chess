@@ -112,15 +112,15 @@ export default async function GameDetailPage({
                     a?.classification === "blunder";
 
                   return (
-                    <tr key={move.id} className={`border-t ${isBad ? "bg-red-50" : ""}`}>
+                      <tr key={move.id} className={`border-t ${isBad ? "bg-red-50" : ""}`}>
                       <td className="p-3">{move.ply}</td>
                       <td className="p-3 font-medium">{move.san}</td>
                       <td className="p-3">{move.side_to_move}</td>
                       <td className="p-3">{move.phase}</td>
                       <td className="p-3">{a?.centipawn_loss ?? "-"}</td>
                       <td className="p-3">{a?.classification ?? "-"}</td>
-                      <td className="p-3">{a?.best_move_uci ?? "-"}</td>
-                    </tr>
+                      <td className="p-3">{a?.best_move_san ?? a?.best_move_uci ?? "-"}</td>
+                      </tr>
                   );
                 })
               )}

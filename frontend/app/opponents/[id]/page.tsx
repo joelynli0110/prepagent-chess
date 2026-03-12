@@ -11,10 +11,13 @@ import { UploadPgnForm } from "./UploadPgnForm";
 
 export default async function OpponentDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ status?: string; message?: string }>;
 }) {
   const { id } = await params;
+  const { status, message } = await searchParams;
 
   const [opponent, openings, blunders, games] = await Promise.all([
     apiGet<OpponentSpace>(`/opponents/${id}`),
@@ -25,6 +28,18 @@ export default async function OpponentDetailPage({
 
   return (
     <main className="mx-auto max-w-6xl p-6 space-y-8">
+      {message ? (
+        <div
+          className={`rounded-2xl border p-4 text-sm ${
+            status === "success"
+              ? "border-green-200 bg-green-50 text-green-800"
+              : "border-red-200 bg-red-50 text-red-800"
+          }`}
+        >
+          {message}
+        </div>
+      ) : null}
+
       <section className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">{opponent.display_name}</h1>
@@ -92,7 +107,9 @@ export default async function OpponentDetailPage({
                     <td className="p-3">{row.eco ?? "-"}</td>
                     <td className="p-3">{row.color}</td>
                     <td className="p-3">{row.games_count}</td>
-                    <td className="p-3">{row.wins}-{row.draws}-{row.losses}</td>
+                    <td className="p-3">
+                      {row.wins}-{row.draws}-{row.losses}
+                    </td>
                     <td className="p-3">{row.avg_centipawn_loss ?? "-"}</td>
                     <td className="p-3">{row.blunder_rate}</td>
                   </tr>

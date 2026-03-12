@@ -54,7 +54,7 @@ class BlunderPatternsService:
         })
 
         for analysis in analyses:
-            if not analysis.classification or analysis.classification.value != "blunder":
+            if not analysis.classification or analysis.classification.value not in {"mistake", "blunder"}:
                 continue
 
             game = game_by_id[analysis.game_id]

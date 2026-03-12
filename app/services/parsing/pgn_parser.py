@@ -6,6 +6,7 @@ import chess
 import chess.pgn
 
 from app.db.models import Phase, Side
+from app.services.parsing.opening_utils import detect_opening_from_moves
 
 
 
@@ -47,6 +48,7 @@ def parse_single_game(game: chess.pgn.Game, raw_pgn_text: str) -> dict[str, Any]
     headers = game.headers
     board = game.board()
     moves: list[dict[str, Any]] = []
+    san_moves: list[str] = []
 
     ply = 0
     node = game
@@ -72,7 +74,18 @@ def parse_single_game(game: chess.pgn.Game, raw_pgn_text: str) -> dict[str, Any]
                 "is_book": ply <= 16,
             }
         )
+        san_moves.append(san)
         node = next_node
+
+    eco = headers.get("ECO") if headers.get("ECO") not in {None, "?"} else None
+    opening_name = headers.get("Opening") if headers.get("Opening") not in {None, "?"} else None
+
+    if not opening_name:
+        fallback_eco, fallback_opening = detect_opening_from_moves(san_moves)
+        if not eco:
+            eco = fallback_eco
+        if not opening_name:
+            opening_name = fallback_opening
 
     return {
         "source": "upload",
@@ -82,8 +95,8 @@ def parse_single_game(game: chess.pgn.Game, raw_pgn_text: str) -> dict[str, Any]
         "result": headers.get("Result", "*"),
         "date_played": parse_game_date(headers.get("Date")),
         "time_control": headers.get("TimeControl") if headers.get("TimeControl") not in {None, "?"} else None,
-        "eco": headers.get("ECO") if headers.get("ECO") not in {None, "?"} else None,
-        "opening_name": headers.get("Opening") if headers.get("Opening") not in {None, "?"} else None,
+        "eco":  eco,
+        "opening_name": opening_name,
         "pgn_text": raw_pgn_text,
         "moves": moves,
     }

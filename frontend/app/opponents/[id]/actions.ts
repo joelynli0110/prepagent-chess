@@ -19,16 +19,19 @@ export async function analyzeOpponentAction(opponentId: string) {
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Analyze opponent failed: ${res.status} ${text}`);
+    redirect(`/opponents/${opponentId}?status=error&message=${encodeURIComponent(`Analyze failed: ${text}`)}`);
   }
 
-  redirect(`/opponents/${opponentId}`);
+  const data = await res.json();
+
+  const message = `Analyzed ${data.analyzed_games} game(s), ${data.analyzed_positions} position(s).`;
+  redirect(`/opponents/${opponentId}?status=success&message=${encodeURIComponent(message)}`);
 }
 
 export async function uploadPgnAction(opponentId: string, formData: FormData) {
   const file = formData.get("file");
   if (!(file instanceof File)) {
-    throw new Error("PGN file is required");
+    redirect(`/opponents/${opponentId}?status=error&message=${encodeURIComponent("PGN file is required")}`);
   }
 
   const outgoing = new FormData();
@@ -42,8 +45,8 @@ export async function uploadPgnAction(opponentId: string, formData: FormData) {
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Upload PGN failed: ${res.status} ${text}`);
+    redirect(`/opponents/${opponentId}?status=error&message=${encodeURIComponent(`Upload failed: ${text}`)}`);
   }
 
-  redirect(`/opponents/${opponentId}`);
+  redirect(`/opponents/${opponentId}?status=success&message=${encodeURIComponent("PGN uploaded successfully.")}`);
 }

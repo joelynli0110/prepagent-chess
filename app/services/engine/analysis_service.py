@@ -5,6 +5,7 @@ from app.db.models import EngineAnalysis, Game, MoveFact
 from app.services.engine.classifier import classify_by_cpl
 from app.services.engine.stockfish_client import StockfishClient
 
+import chess
 
 class AnalysisService:
     def __init__(self, stockfish_client: StockfishClient | None = None):
@@ -45,6 +46,16 @@ class AnalysisService:
             else:
                 cpl = max(0, (eval_after_cp or 0) - (eval_before_cp or 0))
 
+            board = chess.Board(move.fen_before)
+            best_move_san = None
+            if best_move_uci:
+                try:
+                    best_move_obj = chess.Move.from_uci(best_move_uci)
+                    if best_move_obj in board.legal_moves:
+                        best_move_san = board.san(best_move_obj)
+                except Exception:
+                    best_move_san = None
+
             analysis = EngineAnalysis(
                 game_id=game_id,
                 ply=move.ply,
@@ -53,6 +64,7 @@ class AnalysisService:
                 eval_before_cp=eval_before_cp,
                 eval_after_cp=eval_after_cp,
                 best_move_uci=best_move_uci,
+                best_move_san=best_move_san,
                 centipawn_loss=cpl,
                 classification=classify_by_cpl(cpl),
                 principal_variation={"pv": before["pv"]},

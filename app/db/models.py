@@ -146,6 +146,7 @@ class EngineAnalysis(Base):
     eval_before_cp: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     eval_after_cp: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     best_move_uci: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    best_move_san: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     centipawn_loss: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     classification: Mapped[Optional[MoveClassification]] = mapped_column(
         SAEnum(MoveClassification),

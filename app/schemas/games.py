@@ -49,6 +49,7 @@ class EngineAnalysisRead(BaseModel):
     eval_before_cp: Optional[int]
     eval_after_cp: Optional[int]
     best_move_uci: Optional[str]
+    best_move_san: Optional[str]
     centipawn_loss: Optional[int]
     classification: Optional[MoveClassification]
     principal_variation: Optional[dict[str, Any]]

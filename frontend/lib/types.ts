@@ -71,6 +71,7 @@ export interface EngineAnalysis {
   eval_before_cp?: number | null;
   eval_after_cp?: number | null;
   best_move_uci?: string | null;
+  best_move_san?: string | null;
   centipawn_loss?: number | null;
   classification?: string | null;
   principal_variation?: { pv?: string[] } | null;
