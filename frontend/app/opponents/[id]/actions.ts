@@ -28,6 +28,20 @@ export async function analyzeOpponentAction(opponentId: string) {
   redirect(`/opponents/${opponentId}?status=success&message=${encodeURIComponent(message)}`);
 }
 
+export async function deleteOpponentAction(opponentId: string) {
+  const res = await fetch(`${API_BASE}/opponents/${opponentId}`, {
+    method: "DELETE",
+    cache: "no-store",
+  });
+
+  if (!res.ok && res.status !== 404) {
+    const text = await res.text();
+    redirect(`/opponents/${opponentId}?status=error&message=${encodeURIComponent(`Delete failed: ${text}`)}`);
+  }
+
+  redirect("/opponents");
+}
+
 export async function uploadPgnAction(opponentId: string, formData: FormData) {
   const file = formData.get("file");
   if (!(file instanceof File)) {

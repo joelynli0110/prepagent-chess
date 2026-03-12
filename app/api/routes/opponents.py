@@ -33,3 +33,12 @@ def get_opponent(opponent_id: str, db: Session = Depends(get_db)) -> OpponentSpa
     if not opponent:
         raise HTTPException(status_code=404, detail="Opponent space not found")
     return opponent
+
+
+@router.delete("/{opponent_id}", status_code=204)
+def delete_opponent(opponent_id: str, db: Session = Depends(get_db)) -> None:
+    opponent = db.get(OpponentSpace, opponent_id)
+    if not opponent:
+        raise HTTPException(status_code=404, detail="Opponent space not found")
+    db.delete(opponent)
+    db.commit()

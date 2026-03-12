@@ -7,7 +7,13 @@ import {
   OpponentSpace,
 } from "@/lib/types";
 import { analyzeOpponentAction } from "./actions";
+import { DeleteOpponentButton } from "./DeleteOpponentButton";
 import { UploadPgnForm } from "./UploadPgnForm";
+
+function winRate(row: OpeningStat) {
+  if (!row.games_count) return null;
+  return Math.round((row.wins / row.games_count) * 100);
+}
 
 export default async function OpponentDetailPage({
   params,
@@ -26,8 +32,19 @@ export default async function OpponentDetailPage({
     apiGet<Game[]>(`/opponents/${id}/games`).catch(() => []),
   ]);
 
+  const analyzedGames = games.filter((g) => g.total_plies > 0);
+
   return (
     <main className="mx-auto max-w-6xl p-6 space-y-8">
+      {/* Back nav */}
+      <Link
+        href="/opponents"
+        className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
+      >
+        ← All opponents
+      </Link>
+
+      {/* Status banner */}
       {message ? (
         <div
           className={`rounded-2xl border p-4 text-sm ${
@@ -40,30 +57,31 @@ export default async function OpponentDetailPage({
         </div>
       ) : null}
 
+      {/* Header */}
       <section className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">{opponent.display_name}</h1>
-          <p className="text-sm text-gray-500">
-            canonical: {opponent.canonical_name}
-          </p>
+          <p className="text-sm text-gray-400">canonical: {opponent.canonical_name}</p>
           {opponent.notes ? (
-            <p className="mt-2 text-sm text-gray-700">{opponent.notes}</p>
+            <p className="mt-2 text-sm text-gray-600">{opponent.notes}</p>
           ) : null}
         </div>
 
-        <form action={analyzeOpponentAction.bind(null, id)}>
-          <button
-            type="submit"
-            className="rounded-xl border px-4 py-2 text-sm hover:bg-gray-50"
-          >
-            Analyze opponent
-          </button>
-        </form>
+        <div className="flex items-center gap-2">
+          <form action={analyzeOpponentAction.bind(null, id)}>
+            <button
+              type="submit"
+              className="rounded-xl border px-4 py-2 text-sm hover:bg-gray-50"
+            >
+              Analyze opponent
+            </button>
+          </form>
+          <DeleteOpponentButton opponentId={id} opponentName={opponent.display_name} />
+        </div>
       </section>
 
-      <UploadPgnForm opponentId={id} />
-
-      <section className="grid gap-4 md:grid-cols-3">
+      {/* Stat cards */}
+      <section className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-2xl border p-4">
           <div className="text-sm text-gray-500">Games</div>
           <div className="mt-1 text-2xl font-semibold">{games.length}</div>
@@ -78,53 +96,90 @@ export default async function OpponentDetailPage({
         </div>
       </section>
 
+      {/* Upload */}
+      <UploadPgnForm opponentId={id} />
+
+      {/* Top Openings */}
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">Top Openings</h2>
         <div className="overflow-hidden rounded-2xl border">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
               <tr>
                 <th className="p-3 text-left">Opening</th>
                 <th className="p-3 text-left">ECO</th>
                 <th className="p-3 text-left">Color</th>
                 <th className="p-3 text-left">Games</th>
                 <th className="p-3 text-left">W-D-L</th>
+                <th className="p-3 text-left">Win %</th>
                 <th className="p-3 text-left">Avg CPL</th>
-                <th className="p-3 text-left">Blunder Rate</th>
+                <th className="p-3 text-left">Blunder rate</th>
               </tr>
             </thead>
             <tbody>
               {openings.length === 0 ? (
                 <tr className="border-t">
-                  <td className="p-3 text-gray-500" colSpan={7}>
-                    No opening stats yet.
+                  <td className="p-3 text-gray-400" colSpan={8}>
+                    No opening stats yet. Upload PGNs and run analysis.
                   </td>
                 </tr>
               ) : (
-                openings.slice(0, 12).map((row, idx) => (
-                  <tr key={`${row.opening_name}-${row.color}-${idx}`} className="border-t">
-                    <td className="p-3">{row.opening_name ?? "Unknown"}</td>
-                    <td className="p-3">{row.eco ?? "-"}</td>
-                    <td className="p-3">{row.color}</td>
-                    <td className="p-3">{row.games_count}</td>
-                    <td className="p-3">
-                      {row.wins}-{row.draws}-{row.losses}
-                    </td>
-                    <td className="p-3">{row.avg_centipawn_loss ?? "-"}</td>
-                    <td className="p-3">{row.blunder_rate}</td>
-                  </tr>
-                ))
+                openings.slice(0, 12).map((row, idx) => {
+                  const wr = winRate(row);
+                  return (
+                    <tr
+                      key={`${row.opening_name}-${row.color}-${idx}`}
+                      className="border-t hover:bg-gray-50"
+                    >
+                      <td className="p-3">{row.opening_name ?? "Unknown"}</td>
+                      <td className="p-3 text-gray-500">{row.eco ?? "—"}</td>
+                      <td className="p-3 capitalize">{row.color}</td>
+                      <td className="p-3 tabular-nums">{row.games_count}</td>
+                      <td className="p-3 tabular-nums">
+                        <span className="text-green-600">{row.wins}</span>
+                        <span className="text-gray-400">-</span>
+                        <span className="text-gray-500">{row.draws}</span>
+                        <span className="text-gray-400">-</span>
+                        <span className="text-red-500">{row.losses}</span>
+                      </td>
+                      <td className="p-3 tabular-nums">
+                        {wr != null ? (
+                          <span
+                            className={
+                              wr >= 60
+                                ? "text-green-600 font-medium"
+                                : wr <= 35
+                                  ? "text-red-600"
+                                  : "text-gray-700"
+                            }
+                          >
+                            {wr}%
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="p-3 tabular-nums">
+                        {row.avg_centipawn_loss != null ? row.avg_centipawn_loss : "—"}
+                      </td>
+                      <td className="p-3 tabular-nums">
+                        {(row.blunder_rate * 100).toFixed(1)}%
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </section>
 
+      {/* Blunder Patterns */}
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">Blunder Patterns</h2>
         <div className="overflow-hidden rounded-2xl border">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
               <tr>
                 <th className="p-3 text-left">Opening</th>
                 <th className="p-3 text-left">Phase</th>
@@ -137,28 +192,33 @@ export default async function OpponentDetailPage({
             <tbody>
               {blunders.length === 0 ? (
                 <tr className="border-t">
-                  <td className="p-3 text-gray-500" colSpan={6}>
+                  <td className="p-3 text-gray-400" colSpan={6}>
                     No blunder patterns yet.
                   </td>
                 </tr>
               ) : (
                 blunders.slice(0, 12).map((row, idx) => (
-                  <tr key={`${row.opening_name}-${row.phase}-${idx}`} className="border-t">
+                  <tr
+                    key={`${row.opening_name}-${row.phase}-${idx}`}
+                    className="border-t hover:bg-gray-50"
+                  >
                     <td className="p-3">{row.opening_name ?? "Unknown"}</td>
-                    <td className="p-3">{row.phase ?? "-"}</td>
-                    <td className="p-3">{row.side ?? "-"}</td>
-                    <td className="p-3">{row.blunder_count}</td>
-                    <td className="p-3">{row.game_count}</td>
+                    <td className="p-3 capitalize text-gray-500">{row.phase ?? "—"}</td>
+                    <td className="p-3 capitalize">{row.side ?? "—"}</td>
+                    <td className="p-3 tabular-nums font-medium text-red-600">
+                      {row.blunder_count}
+                    </td>
+                    <td className="p-3 tabular-nums">{row.game_count}</td>
                     <td className="p-3">
                       {row.sample_game_id ? (
                         <Link
                           href={`/opponents/${id}/games/${row.sample_game_id}`}
-                          className="underline"
+                          className="text-blue-600 underline hover:text-blue-800"
                         >
                           ply {row.sample_ply}
                         </Link>
                       ) : (
-                        "-"
+                        "—"
                       )}
                     </td>
                   </tr>
@@ -169,11 +229,19 @@ export default async function OpponentDetailPage({
         </div>
       </section>
 
+      {/* Games list */}
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Games</h2>
+        <h2 className="text-xl font-semibold">
+          Games{" "}
+          {analyzedGames.length > 0 && analyzedGames.length < games.length && (
+            <span className="text-sm font-normal text-gray-400">
+              ({analyzedGames.length} analyzed)
+            </span>
+          )}
+        </h2>
         <div className="space-y-2">
           {games.length === 0 ? (
-            <div className="rounded-2xl border p-4 text-sm text-gray-500">
+            <div className="rounded-2xl border p-6 text-sm text-gray-500">
               No games yet. Upload a PGN above.
             </div>
           ) : (
@@ -181,14 +249,29 @@ export default async function OpponentDetailPage({
               <Link
                 key={game.id}
                 href={`/opponents/${id}/games/${game.id}`}
-                className="block rounded-xl border p-4 hover:bg-gray-50"
+                className="flex items-center justify-between rounded-xl border p-4 hover:bg-gray-50"
               >
-                <div className="font-medium">
-                  {game.white_name} vs {game.black_name}
+                <div>
+                  <div className="font-medium">
+                    {game.white_name} vs {game.black_name}
+                  </div>
+                  <div className="mt-0.5 text-sm text-gray-500">
+                    {game.opening_name ?? "Unknown opening"}
+                    {game.date_played ? ` · ${game.date_played}` : ""}
+                  </div>
                 </div>
-                <div className="mt-1 text-sm text-gray-500">
-                  {game.opening_name ?? "Unknown opening"} · {game.result}
-                  {game.date_played ? ` · ${game.date_played}` : ""}
+                <div className="ml-4 shrink-0 text-sm font-medium">
+                  <span
+                    className={
+                      game.result === "1-0"
+                        ? "text-green-700"
+                        : game.result === "0-1"
+                          ? "text-red-600"
+                          : "text-gray-500"
+                    }
+                  >
+                    {game.result}
+                  </span>
                 </div>
               </Link>
             ))

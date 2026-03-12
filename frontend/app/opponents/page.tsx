@@ -8,13 +8,13 @@ export default async function OpponentsPage() {
 
   return (
     <main className="mx-auto max-w-5xl p-6 space-y-6">
-      <h1 className="text-2xl font-semibold">Opponent Spaces</h1>
+      <h1 className="text-2xl font-semibold">Opponents</h1>
 
       <CreateOpponentForm />
 
       {opponents.length === 0 ? (
-        <div className="rounded-2xl border p-4 text-sm text-gray-600">
-          No opponent spaces yet.
+        <div className="rounded-2xl border p-6 text-sm text-gray-500">
+          No opponents yet. Create one above to get started.
         </div>
       ) : (
         <div className="space-y-3">
@@ -22,13 +22,15 @@ export default async function OpponentsPage() {
             <Link
               key={opponent.id}
               href={`/opponents/${opponent.id}`}
-              className="block rounded-2xl border p-4 hover:bg-gray-50"
+              className="flex items-center justify-between rounded-2xl border p-4 hover:bg-gray-50"
             >
-              <div className="font-medium">{opponent.display_name}</div>
-              <div className="text-sm text-gray-500">
-                canonical: {opponent.canonical_name}
+              <div>
+                <div className="font-medium">{opponent.display_name}</div>
+                <div className="text-sm text-gray-400">
+                  {opponent.canonical_name}
+                </div>
               </div>
-              <div className="text-xs text-gray-400 mt-1">id: {opponent.id}</div>
+              <span className="text-sm text-gray-400">→</span>
             </Link>
           ))}
         </div>
