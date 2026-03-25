@@ -61,10 +61,6 @@ export default async function OpponentDetailPage({
       <section className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">{opponent.display_name}</h1>
-          <p className="text-sm text-gray-400">canonical: {opponent.canonical_name}</p>
-          {opponent.notes ? (
-            <p className="mt-2 text-sm text-gray-600">{opponent.notes}</p>
-          ) : null}
         </div>
 
         <div className="flex items-center gap-2">

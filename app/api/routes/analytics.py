@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import OpponentSpace
+from app.db.models import Game, OpponentSpace
 from app.dependencies import get_db
 from app.schemas.analytics import (
     BlunderSummaryRead,
@@ -12,6 +13,7 @@ from app.schemas.analytics import (
 from app.services.analytics.blunder_patterns import BlunderPatternsService
 from app.services.analytics.opening_stats import OpeningStatsService
 from app.services.engine.analysis_service import AnalysisService
+from app.services.opponents.identity import OpponentIdentityService
 
 router = APIRouter(prefix="/opponents/{opponent_id}", tags=["analytics"])
 
@@ -21,6 +23,21 @@ def analyze_opponent(opponent_id: str, payload: OpponentAnalyzeRequest, db: Sess
     opponent = db.get(OpponentSpace, opponent_id)
     if not opponent:
         raise HTTPException(status_code=404, detail="Opponent space not found")
+
+    # Recompute opponent-side identity for all games before running engine analysis.
+    # This fixes games that were imported before identity matching worked for their
+    # name format (e.g. "Carlsen, Magnus" vs "Magnus Carlsen").
+    identity_service = OpponentIdentityService()
+    games_to_fix = list(db.scalars(select(Game).where(Game.opponent_space_id == opponent_id)).all())
+    for game in games_to_fix:
+        result = identity_service.infer_side(
+            canonical_name=opponent.canonical_name,
+            white_name=game.white_name,
+            black_name=game.black_name,
+        )
+        game.opponent_name_in_game = result.matched_name
+        game.opponent_side = result.opponent_side
+    db.commit()
 
     service = AnalysisService()
     try:

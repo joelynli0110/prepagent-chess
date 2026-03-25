@@ -24,12 +24,7 @@ export default async function OpponentsPage() {
               href={`/opponents/${opponent.id}`}
               className="flex items-center justify-between rounded-2xl border p-4 hover:bg-gray-50"
             >
-              <div>
-                <div className="font-medium">{opponent.display_name}</div>
-                <div className="text-sm text-gray-400">
-                  {opponent.canonical_name}
-                </div>
-              </div>
+              <div className="font-medium">{opponent.display_name}</div>
               <span className="text-sm text-gray-400">→</span>
             </Link>
           ))}
