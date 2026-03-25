@@ -60,4 +60,12 @@ class OpponentIdentityService:
         if canon_tokens and canon_tokens & black_tokens:
             return IdentityMatchResult(matched_name=black_name, opponent_side=Side.black, confidence=0.6)
 
+        # Reverse substring: check if any token from the player name appears inside
+        # the canonical string. Handles canonical stored without spaces ("magnuscarlsen")
+        # vs PGN name in "Carlsen, Magnus" format whose tokens are {"carlsen", "magnus"}.
+        if canon and any(t in canon for t in white_tokens):
+            return IdentityMatchResult(matched_name=white_name, opponent_side=Side.white, confidence=0.5)
+        if canon and any(t in canon for t in black_tokens):
+            return IdentityMatchResult(matched_name=black_name, opponent_side=Side.black, confidence=0.5)
+
         return IdentityMatchResult(matched_name=None, opponent_side=None, confidence=0.0)

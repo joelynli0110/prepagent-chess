@@ -58,10 +58,14 @@ function cplColor(cpl: number | null | undefined) {
   return "text-gray-700";
 }
 
-function formatEval(cp: number | null | undefined) {
-  if (cp == null) return "—";
-  const pawns = cp / 100;
-  return (pawns >= 0 ? "+" : "") + pawns.toFixed(2);
+function formatEvalDelta(before: number | null | undefined, after: number | null | undefined) {
+  if (before == null || after == null) return null;
+  const delta = (after - before) / 100;
+  const abs = Math.abs(delta).toFixed(1);
+  if (abs === "0.0") return { text: "0.0", colorClass: "text-gray-400" };
+  const arrow = delta > 0 ? "↑" : "↓";
+  const colorClass = delta > 0 ? "text-green-600" : "text-red-600";
+  return { text: `${arrow} ${abs}`, colorClass };
 }
 
 export default async function GameDetailPage({
@@ -156,7 +160,7 @@ export default async function GameDetailPage({
                   <th className="p-3 text-left">Move</th>
                   <th className="p-3 text-left">SAN</th>
                   <th className="p-3 text-left">Phase</th>
-                  <th className="p-3 text-left">Eval before → after</th>
+                  <th className="p-3 text-left">Eval</th>
                   <th className="p-3 text-left">CPL</th>
                   <th className="p-3 text-left">Classification</th>
                   <th className="p-3 text-left">Best move</th>
@@ -187,16 +191,15 @@ export default async function GameDetailPage({
                       <td className="p-3 text-gray-400 tabular-nums">{moveLabel}</td>
                       <td className="p-3 font-medium font-mono">{move.san}</td>
                       <td className="p-3 capitalize text-gray-500">{move.phase}</td>
-                      <td className="p-3 tabular-nums text-gray-600">
-                        {a ? (
-                          <span>
-                            {formatEval(a.eval_before_cp)}
-                            <span className="mx-1 text-gray-300">→</span>
-                            {formatEval(a.eval_after_cp)}
-                          </span>
-                        ) : (
-                          <span className="text-gray-300">—</span>
-                        )}
+                      <td className="p-3 tabular-nums">
+                        {(() => {
+                          const delta = a ? formatEvalDelta(a.eval_before_cp, a.eval_after_cp) : null;
+                          return delta ? (
+                            <span className={`font-medium ${delta.colorClass}`}>{delta.text}</span>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          );
+                        })()}
                       </td>
                       <td className={`p-3 tabular-nums ${cplColor(a?.centipawn_loss)}`}>
                         {a?.centipawn_loss != null ? a.centipawn_loss : "—"}

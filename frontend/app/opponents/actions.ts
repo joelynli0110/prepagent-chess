@@ -11,9 +11,10 @@ export async function createOpponentAction(formData: FormData) {
     throw new Error("Name is required");
   }
 
-  // Derive canonical_name from display_name: lowercase alphanumeric only.
-  // Matches the normalization used by OpponentIdentityService.
-  const canonical_name = display_name.toLowerCase().replace(/[^a-z0-9]/g, "");
+  // Store canonical_name as the trimmed display name (preserving spaces) so that
+  // OpponentIdentityService._name_tokens() can split it into individual name tokens
+  // for matching against PGN player names in any format (e.g. "Carlsen, Magnus").
+  const canonical_name = display_name.trim();
 
   const res = await fetch(`${API_BASE}/opponents`, {
     method: "POST",
