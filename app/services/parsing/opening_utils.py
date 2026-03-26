@@ -2,32 +2,32 @@ from __future__ import annotations
 
 from typing import Optional
 
-import chess
+from app.services.parsing.opening_book import lookup_opening
 
 
 def detect_opening_from_moves(moves_san: list[str]) -> tuple[Optional[str], Optional[str]]:
     """
-    Lightweight fallback opening detector.
-    Returns (eco, opening_name).
-    Expand gradually over time.
+    Detect opening ECO and name from a list of SAN moves by replaying the
+    position and looking up each EPD in the lichess ECO book.
+
+    Returns the deepest (most specific) match found, i.e. the last position
+    that appears in the opening book.
     """
-    seq = " ".join(moves_san[:8])
+    import chess
 
-    patterns = [
-        ("C50", "Italian Game", ["e4", "e5", "Nf3", "Nc6", "Bc4"]),
-        ("C60", "Ruy Lopez", ["e4", "e5", "Nf3", "Nc6", "Bb5"]),
-        ("B20", "Sicilian Defense", ["e4", "c5"]),
-        ("B10", "Caro-Kann Defense", ["e4", "c6"]),
-        ("C00", "French Defense", ["e4", "e6"]),
-        ("B01", "Scandinavian Defense", ["e4", "d5"]),
-        ("D00", "Queen's Pawn Game", ["d4", "d5"]),
-        ("D06", "Queen's Gambit", ["d4", "d5", "c4"]),
-        ("E60", "King's Indian Defense", ["d4", "Nf6", "c4", "g6"]),
-        ("A04", "Reti Opening", ["Nf3"]),
-    ]
+    board = chess.Board()
+    best_eco: Optional[str] = None
+    best_name: Optional[str] = None
 
-    for eco, name, pattern in patterns:
-        if len(moves_san) >= len(pattern) and moves_san[:len(pattern)] == pattern:
-            return eco, name
+    for san in moves_san:
+        try:
+            move = board.parse_san(san)
+        except Exception:
+            break
+        board.push(move)
+        epd = board.epd()
+        result = lookup_opening(epd)
+        if result:
+            best_eco, best_name = result
 
-    return None, None
+    return best_eco, best_name

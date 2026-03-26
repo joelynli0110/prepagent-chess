@@ -38,6 +38,7 @@ export interface OpeningStat {
 
 export interface BlunderSummary {
   opening_name?: string | null;
+  eco?: string | null;
   phase?: Phase | null;
   side?: Side | null;
   blunder_count: number;

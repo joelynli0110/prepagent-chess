@@ -6,7 +6,7 @@ from app.services.parsing.pgn_parser import parse_pgn_text
 
 
 
-def process_pgn_import_job(db: Session, job: Job, opponent_space_id: str, pgn_text: str) -> None:
+def process_pgn_import_job(db: Session, job: Job, opponent_space_id: str, pgn_text: str, source: str = "upload") -> None:
     job.status = JobStatus.running
     db.commit()
 
@@ -25,7 +25,7 @@ def process_pgn_import_job(db: Session, job: Job, opponent_space_id: str, pgn_te
 
         game = Game(
             opponent_space_id=opponent_space_id,
-            source=parsed["source"],
+            source=source,
             source_game_id=parsed["source_game_id"],
             white_name=parsed["white_name"],
             black_name=parsed["black_name"],

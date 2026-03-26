@@ -6,8 +6,10 @@ import {
   OpeningStat,
   OpponentSpace,
 } from "@/lib/types";
-import { analyzeOpponentAction } from "./actions";
+import { AnalyzeButton } from "./AnalyzeButton";
+import { ChessbaseFetchForm } from "./ChessbaseFetchForm";
 import { DeleteOpponentButton } from "./DeleteOpponentButton";
+import { PlatformImportForm } from "./PlatformImportForm";
 import { UploadPgnForm } from "./UploadPgnForm";
 
 function winRate(row: OpeningStat) {
@@ -64,14 +66,7 @@ export default async function OpponentDetailPage({
         </div>
 
         <div className="flex items-center gap-2">
-          <form action={analyzeOpponentAction.bind(null, id)}>
-            <button
-              type="submit"
-              className="rounded-xl border px-4 py-2 text-sm hover:bg-gray-50"
-            >
-              Analyze opponent
-            </button>
-          </form>
+          <AnalyzeButton opponentId={id} />
           <DeleteOpponentButton opponentId={id} opponentName={opponent.display_name} />
         </div>
       </section>
@@ -92,8 +87,12 @@ export default async function OpponentDetailPage({
         </div>
       </section>
 
-      {/* Upload */}
-      <UploadPgnForm opponentId={id} />
+      {/* Import */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <UploadPgnForm opponentId={id} />
+        <ChessbaseFetchForm opponentId={id} />
+      </div>
+      <PlatformImportForm opponentId={id} />
 
       {/* Top Openings */}
       <section className="space-y-3">
@@ -103,8 +102,6 @@ export default async function OpponentDetailPage({
             <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
               <tr>
                 <th className="p-3 text-left">Opening</th>
-                <th className="p-3 text-left">ECO</th>
-                <th className="p-3 text-left">Color</th>
                 <th className="p-3 text-left">Games</th>
                 <th className="p-3 text-left">W-D-L</th>
                 <th className="p-3 text-left">Win %</th>
@@ -115,27 +112,54 @@ export default async function OpponentDetailPage({
             <tbody>
               {openings.length === 0 ? (
                 <tr className="border-t">
-                  <td className="p-3 text-gray-400" colSpan={8}>
+                  <td className="p-3 text-gray-400" colSpan={6}>
                     No opening stats yet. Upload PGNs and run analysis.
                   </td>
                 </tr>
               ) : (
                 openings.slice(0, 12).map((row, idx) => {
                   const wr = winRate(row);
+                  const fullName = row.opening_name ?? "";
+                  const colonIdx = fullName.indexOf(":");
+                  const openingMain = colonIdx >= 0 ? fullName.slice(0, colonIdx).trim() : fullName;
+                  const variation = colonIdx >= 0 ? fullName.slice(colonIdx + 1).trim() : null;
+
                   return (
                     <tr
                       key={`${row.opening_name}-${row.color}-${idx}`}
                       className="border-t hover:bg-gray-50"
                     >
-                      <td className="p-3">{row.opening_name ?? "Unknown"}</td>
-                      <td className="p-3 text-gray-500">{row.eco ?? "—"}</td>
-                      <td className="p-3 capitalize">{row.color}</td>
+                      <td className="p-3 max-w-xs">
+                        <div className="flex items-start gap-2">
+                          {row.eco && (
+                            <span className="mt-0.5 shrink-0 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-500">
+                              {row.eco}
+                            </span>
+                          )}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-gray-900">
+                                {openingMain || "Unknown"}
+                              </span>
+                              <span
+                                className={`inline-block h-2 w-2 rounded-full ${
+                                  row.color === "white" ? "bg-gray-200 ring-1 ring-gray-400" : "bg-gray-800"
+                                }`}
+                                title={row.color}
+                              />
+                            </div>
+                            {variation && (
+                              <div className="mt-0.5 text-xs text-gray-400">{variation}</div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
                       <td className="p-3 tabular-nums">{row.games_count}</td>
                       <td className="p-3 tabular-nums">
                         <span className="text-green-600">{row.wins}</span>
-                        <span className="text-gray-400">-</span>
+                        <span className="text-gray-300 mx-0.5">/</span>
                         <span className="text-gray-500">{row.draws}</span>
-                        <span className="text-gray-400">-</span>
+                        <span className="text-gray-300 mx-0.5">/</span>
                         <span className="text-red-500">{row.losses}</span>
                       </td>
                       <td className="p-3 tabular-nums">
@@ -151,14 +175,12 @@ export default async function OpponentDetailPage({
                           >
                             {wr}%
                           </span>
-                        ) : (
-                          "—"
-                        )}
+                        ) : "—"}
                       </td>
-                      <td className="p-3 tabular-nums">
+                      <td className="p-3 tabular-nums text-gray-600">
                         {row.avg_centipawn_loss != null ? row.avg_centipawn_loss : "—"}
                       </td>
-                      <td className="p-3 tabular-nums">
+                      <td className="p-3 tabular-nums text-gray-600">
                         {(row.blunder_rate * 100).toFixed(1)}%
                       </td>
                     </tr>
@@ -179,7 +201,6 @@ export default async function OpponentDetailPage({
               <tr>
                 <th className="p-3 text-left">Opening</th>
                 <th className="p-3 text-left">Phase</th>
-                <th className="p-3 text-left">Side</th>
                 <th className="p-3 text-left">Count</th>
                 <th className="p-3 text-left">Games</th>
                 <th className="p-3 text-left">Sample</th>
@@ -188,37 +209,67 @@ export default async function OpponentDetailPage({
             <tbody>
               {blunders.length === 0 ? (
                 <tr className="border-t">
-                  <td className="p-3 text-gray-400" colSpan={6}>
+                  <td className="p-3 text-gray-400" colSpan={5}>
                     No blunder patterns yet.
                   </td>
                 </tr>
               ) : (
-                blunders.slice(0, 12).map((row, idx) => (
-                  <tr
-                    key={`${row.opening_name}-${row.phase}-${idx}`}
-                    className="border-t hover:bg-gray-50"
-                  >
-                    <td className="p-3">{row.opening_name ?? "Unknown"}</td>
-                    <td className="p-3 capitalize text-gray-500">{row.phase ?? "—"}</td>
-                    <td className="p-3 capitalize">{row.side ?? "—"}</td>
-                    <td className="p-3 tabular-nums font-medium text-red-600">
-                      {row.blunder_count}
-                    </td>
-                    <td className="p-3 tabular-nums">{row.game_count}</td>
-                    <td className="p-3">
-                      {row.sample_game_id ? (
-                        <Link
-                          href={`/opponents/${id}/games/${row.sample_game_id}`}
-                          className="text-blue-600 underline hover:text-blue-800"
-                        >
-                          ply {row.sample_ply}
-                        </Link>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                  </tr>
-                ))
+                blunders.slice(0, 12).map((row, idx) => {
+                  const fullName = row.opening_name ?? "";
+                  const colonIdx = fullName.indexOf(":");
+                  const openingMain = colonIdx >= 0 ? fullName.slice(0, colonIdx).trim() : fullName;
+                  const variation = colonIdx >= 0 ? fullName.slice(colonIdx + 1).trim() : null;
+
+                  return (
+                    <tr
+                      key={`${row.opening_name}-${row.phase}-${idx}`}
+                      className="border-t hover:bg-gray-50"
+                    >
+                      <td className="p-3 max-w-xs">
+                        <div className="flex items-start gap-2">
+                          {row.eco && (
+                            <span className="mt-0.5 shrink-0 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-500">
+                              {row.eco}
+                            </span>
+                          )}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-gray-900">
+                                {openingMain || "Unknown"}
+                              </span>
+                              {row.side && (
+                                <span
+                                  className={`inline-block h-2 w-2 rounded-full ${
+                                    row.side === "white" ? "bg-gray-200 ring-1 ring-gray-400" : "bg-gray-800"
+                                  }`}
+                                  title={row.side}
+                                />
+                              )}
+                            </div>
+                            {variation && (
+                              <div className="mt-0.5 text-xs text-gray-400">{variation}</div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-3 capitalize text-gray-500">{row.phase ?? "—"}</td>
+                      <td className="p-3 tabular-nums font-medium text-red-600">
+                        {row.blunder_count}
+                      </td>
+                      <td className="p-3 tabular-nums">{row.game_count}</td>
+                      <td className="p-3">
+                        {row.sample_game_id ? (
+                          <Link
+                            href={`/opponents/${id}/games/${row.sample_game_id}`}
+                            className="text-blue-600 underline hover:text-blue-800"
+                          >
+                            ply {row.sample_ply}
+                          </Link>
+                        ) : "—"}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

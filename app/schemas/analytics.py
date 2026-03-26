@@ -21,6 +21,7 @@ class OpeningStatRead(BaseModel):
 
 class BlunderSummaryRead(BaseModel):
     opening_name: Optional[str]
+    eco: Optional[str]
     phase: Optional[Phase]
     side: Optional[Side]
     blunder_count: int

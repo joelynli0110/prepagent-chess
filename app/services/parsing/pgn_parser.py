@@ -80,12 +80,14 @@ def parse_single_game(game: chess.pgn.Game, raw_pgn_text: str) -> dict[str, Any]
     eco = headers.get("ECO") if headers.get("ECO") not in {None, "?"} else None
     opening_name = headers.get("Opening") if headers.get("Opening") not in {None, "?"} else None
 
-    if not opening_name:
-        fallback_eco, fallback_opening = detect_opening_from_moves(san_moves)
-        if not eco:
-            eco = fallback_eco
-        if not opening_name:
-            opening_name = fallback_opening
+    # Always run the position-based book lookup — it gives exact variation names
+    # (e.g. "Sicilian Defense: Najdorf Variation") which are more specific than
+    # generic PGN Opening headers.
+    book_eco, book_name = detect_opening_from_moves(san_moves)
+    if book_eco:
+        eco = book_eco
+    if book_name:
+        opening_name = book_name
 
     return {
         "source": "upload",

@@ -1,73 +1,123 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Game, OpponentSpace
+from app.db.models import Game, Job, JobStatus, JobType, MoveFact, OpponentSpace
 from app.dependencies import get_db
 from app.schemas.analytics import (
     BlunderSummaryRead,
     OpeningStatRead,
     OpponentAnalyzeRequest,
-    OpponentAnalyzeResponse,
 )
+from app.schemas.jobs import JobRead
 from app.services.analytics.blunder_patterns import BlunderPatternsService
 from app.services.analytics.opening_stats import OpeningStatsService
 from app.services.engine.analysis_service import AnalysisService
 from app.services.opponents.identity import OpponentIdentityService
+from app.services.parsing.opening_utils import detect_opening_from_moves
 
 router = APIRouter(prefix="/opponents/{opponent_id}", tags=["analytics"])
 
 
-@router.post("/analyze", response_model=OpponentAnalyzeResponse)
-def analyze_opponent(opponent_id: str, payload: OpponentAnalyzeRequest, db: Session = Depends(get_db)) -> OpponentAnalyzeResponse:
+def _run_analysis(job_id: str, opponent_id: str, payload_dict: dict) -> None:
+    from app.db.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        job = db.get(Job, job_id)
+        if not job:
+            return
+        job.status = JobStatus.running
+        db.commit()
+
+        opponent = db.get(OpponentSpace, opponent_id)
+        if not opponent:
+            job.status = JobStatus.failed
+            job.result = {"error": "Opponent not found"}
+            db.commit()
+            return
+
+        identity_service = OpponentIdentityService()
+        games = list(db.scalars(select(Game).where(Game.opponent_space_id == opponent_id)).all())
+
+        for game in games:
+            result = identity_service.infer_side(
+                canonical_name=opponent.canonical_name,
+                white_name=game.white_name,
+                black_name=game.black_name,
+            )
+            game.opponent_name_in_game = result.matched_name
+            game.opponent_side = result.opponent_side
+
+        for game in games:
+            moves = list(
+                db.scalars(
+                    select(MoveFact)
+                    .where(MoveFact.game_id == game.id)
+                    .order_by(MoveFact.ply.asc())
+                ).all()
+            )
+            eco, opening_name = detect_opening_from_moves([m.san for m in moves])
+            if eco:
+                game.eco = eco
+            if opening_name:
+                game.opening_name = opening_name
+
+        db.commit()
+
+        service = AnalysisService()
+        analyzed_games, analyzed_positions = service.analyze_opponent(
+            db=db,
+            opponent_id=opponent_id,
+            depth=payload_dict["depth"],
+            max_games=payload_dict.get("max_games"),
+            max_plies=payload_dict.get("max_plies"),
+            only_missing=payload_dict.get("only_missing", True),
+        )
+
+        job.status = JobStatus.completed
+        job.result = {
+            "analyzed_games": analyzed_games,
+            "analyzed_positions": analyzed_positions,
+        }
+        db.commit()
+
+    except Exception as exc:
+        try:
+            job = db.get(Job, job_id)
+            if job:
+                job.status = JobStatus.failed
+                job.result = {"error": str(exc)}
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
+@router.post("/analyze", response_model=JobRead)
+def analyze_opponent(
+    opponent_id: str,
+    payload: OpponentAnalyzeRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> Job:
     opponent = db.get(OpponentSpace, opponent_id)
     if not opponent:
         raise HTTPException(status_code=404, detail="Opponent space not found")
 
-    # Recompute opponent-side identity for all games before running engine analysis.
-    # This fixes games that were imported before identity matching worked for their
-    # name format (e.g. "Carlsen, Magnus" vs "Magnus Carlsen").
-    identity_service = OpponentIdentityService()
-    games_to_fix = list(db.scalars(select(Game).where(Game.opponent_space_id == opponent_id)).all())
-    for game in games_to_fix:
-        result = identity_service.infer_side(
-            canonical_name=opponent.canonical_name,
-            white_name=game.white_name,
-            black_name=game.black_name,
-        )
-        game.opponent_name_in_game = result.matched_name
-        game.opponent_side = result.opponent_side
-    db.commit()
-
-    service = AnalysisService()
-    try:
-        analyzed_games, analyzed_positions = service.analyze_opponent(
-            db=db,
-            opponent_id=opponent_id,
-            depth=payload.depth,
-            max_games=payload.max_games,
-            max_plies=payload.max_plies,
-            only_missing=payload.only_missing,
-        )
-    except FileNotFoundError:
-        raise HTTPException(
-            status_code=500,
-            detail="Stockfish binary not found. Check STOCKFISH_PATH in your environment.",
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Opponent analysis failed: {exc}")
-
-    requested_games = len(opponent.games)
-    if payload.max_games is not None:
-        requested_games = min(requested_games, payload.max_games)
-
-    return OpponentAnalyzeResponse(
-        opponent_id=opponent_id,
-        requested_games=requested_games,
-        analyzed_games=analyzed_games,
-        analyzed_positions=analyzed_positions,
-        depth=payload.depth,
+    job = Job(
+        opponent_space_id=opponent_id,
+        job_type=JobType.analyze_games,
+        status=JobStatus.queued,
+        payload=payload.model_dump(),
     )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    background_tasks.add_task(_run_analysis, job.id, opponent_id, payload.model_dump())
+    return job
 
 
 @router.get("/openings", response_model=list[OpeningStatRead])

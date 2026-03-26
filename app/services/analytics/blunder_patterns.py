@@ -43,6 +43,7 @@ class BlunderPatternsService:
 
         buckets: dict[tuple, dict] = defaultdict(lambda: {
             "opening_name": None,
+            "eco": None,
             "phase": None,
             "side": None,
             "blunder_count": 0,
@@ -69,6 +70,7 @@ class BlunderPatternsService:
             key = (game.opening_name, move.phase, game.opponent_side)
             bucket = buckets[key]
             bucket["opening_name"] = game.opening_name
+            bucket["eco"] = game.eco
             bucket["phase"] = move.phase
             bucket["side"] = game.opponent_side
             bucket["blunder_count"] += 1
@@ -88,6 +90,7 @@ class BlunderPatternsService:
             results.append(
                 {
                     "opening_name": bucket["opening_name"],
+                    "eco": bucket["eco"],
                     "phase": bucket["phase"],
                     "side": bucket["side"],
                     "blunder_count": bucket["blunder_count"],
