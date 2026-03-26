@@ -66,34 +66,21 @@ def search_lichess(display_name: str) -> list[dict]:
         return []
 
     results = []
-    name_lower = display_name.lower()
     for user in users:
+        title = user.get("title") or ""
+        # Lichess only grants titles after manual identity verification
+        if not title:
+            continue
         profile = user.get("profile") or {}
         real_name = (profile.get("realName") or "").strip()
-        title = user.get("title") or ""
         username = user.get("username", "")
-        # Accept if realName matches, or if it's a titled player with matching username
-        name_match = real_name and real_name.lower() == name_lower
-        title_match = bool(title) and any(
-            c in username.lower() for c in _candidate_usernames(display_name)[:1]
-        )
-        if name_match or title_match or real_name.lower().replace(" ", "") == name_lower.replace(" ", ""):
-            results.append({
-                "platform": "lichess",
-                "username": username,
-                "real_name": real_name or None,
-                "title": title or None,
-                "url": f"https://lichess.org/@/{username}",
-            })
-        elif not real_name and username:
-            # No realName set — still include as a candidate (user can confirm)
-            results.append({
-                "platform": "lichess",
-                "username": username,
-                "real_name": None,
-                "title": title or None,
-                "url": f"https://lichess.org/@/{username}",
-            })
+        results.append({
+            "platform": "lichess",
+            "username": username,
+            "real_name": real_name or None,
+            "title": title,
+            "url": f"https://lichess.org/@/{username}",
+        })
 
     return results
 
@@ -116,16 +103,20 @@ def search_chesscom(display_name: str) -> list[dict]:
             continue
         seen.add(uname.lower())
 
+        title = (data.get("title") or "").strip()
+        # A non-empty title (GM, IM, FM, …) is the reliable signal for a
+        # verified titled player; the `verified` flag is not consistently set
+        # by the Chess.com API for titled accounts.
+        if not title:
+            continue
+
         real_name = (data.get("name") or "").strip()
-        title = data.get("title") or ""
-        verified = data.get("verified", False)
 
         results.append({
             "platform": "chesscom",
             "username": uname,
             "real_name": real_name or None,
-            "title": title or None,
-            "verified": verified,
+            "title": title,
             "url": data.get("url") or f"https://www.chess.com/member/{uname}",
         })
 
