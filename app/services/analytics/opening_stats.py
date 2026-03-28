@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from datetime import date
 from typing import Optional
@@ -7,11 +8,18 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import EngineAnalysis, Game
+from app.db.models import EngineAnalysis, Game, OpeningStat
+
+logger = logging.getLogger(__name__)
 
 
 class OpeningStatsService:
-    def compute(self, db: Session, opponent_id: str) -> list[dict]:
+    # ------------------------------------------------------------------
+    # Core aggregation (pure computation — no DB writes)
+    # ------------------------------------------------------------------
+
+    def _compute(self, db: Session, opponent_id: str) -> list[dict]:
+        """Aggregate opening stats from the games and engine_analyses tables."""
         games = list(
             db.scalars(
                 select(Game)
@@ -42,7 +50,9 @@ class OpeningStatsService:
             bucket["games_count"] += 1
             bucket["_game_ids"].append(game.id)
 
-            if game.date_played and (bucket["last_seen"] is None or game.date_played > bucket["last_seen"]):
+            if game.date_played and (
+                bucket["last_seen"] is None or game.date_played > bucket["last_seen"]
+            ):
                 bucket["last_seen"] = game.date_played
 
             if game.result == "1/2-1/2":
@@ -58,41 +68,37 @@ class OpeningStatsService:
                 else:
                     bucket["losses"] += 1
 
+        # Pull engine analysis for CPL and blunder rate
         game_ids = [g.id for g in games]
-        analyses = []
-        if game_ids:
-            analyses = list(
-                db.scalars(
-                    select(EngineAnalysis)
-                    .where(EngineAnalysis.game_id.in_(game_ids))
-                ).all()
-            )
-
         cpl_map: dict[str, list[int]] = defaultdict(list)
         blunder_map: dict[str, int] = defaultdict(int)
         move_count_map: dict[str, int] = defaultdict(int)
 
-        for analysis in analyses:
-            cpl = analysis.centipawn_loss
-            if cpl is not None:
-                cpl_map[analysis.game_id].append(cpl)
-            move_count_map[analysis.game_id] += 1
-            if analysis.classification and analysis.classification.value == "blunder":
-                blunder_map[analysis.game_id] += 1
+        if game_ids:
+            for analysis in db.scalars(
+                select(EngineAnalysis).where(EngineAnalysis.game_id.in_(game_ids))
+            ).all():
+                if analysis.centipawn_loss is not None:
+                    cpl_map[analysis.game_id].append(analysis.centipawn_loss)
+                move_count_map[analysis.game_id] += 1
+                if analysis.classification and analysis.classification.value == "blunder":
+                    blunder_map[analysis.game_id] += 1
 
         results = []
         for bucket in buckets.values():
             avg_cpls: list[float] = []
             total_blunders = 0
             total_analyzed_moves = 0
-            for game_id in bucket["_game_ids"]:
-                if cpl_map.get(game_id):
-                    avg_cpls.append(sum(cpl_map[game_id]) / len(cpl_map[game_id]))
-                total_blunders += blunder_map.get(game_id, 0)
-                total_analyzed_moves += move_count_map.get(game_id, 0)
+            for gid in bucket["_game_ids"]:
+                if cpl_map.get(gid):
+                    avg_cpls.append(sum(cpl_map[gid]) / len(cpl_map[gid]))
+                total_blunders += blunder_map.get(gid, 0)
+                total_analyzed_moves += move_count_map.get(gid, 0)
 
-            avg_centipawn_loss = sum(avg_cpls) / len(avg_cpls) if avg_cpls else None
-            blunder_rate = (total_blunders / total_analyzed_moves) if total_analyzed_moves else 0.0
+            avg_cpl = sum(avg_cpls) / len(avg_cpls) if avg_cpls else None
+            blunder_rate = (
+                total_blunders / total_analyzed_moves if total_analyzed_moves else 0.0
+            )
 
             results.append(
                 {
@@ -104,10 +110,99 @@ class OpeningStatsService:
                     "draws": bucket["draws"],
                     "losses": bucket["losses"],
                     "last_seen": bucket["last_seen"],
-                    "avg_centipawn_loss": round(avg_centipawn_loss, 2) if avg_centipawn_loss is not None else None,
+                    "avg_centipawn_loss": (
+                        round(avg_cpl, 2) if avg_cpl is not None else None
+                    ),
                     "blunder_rate": round(blunder_rate, 4),
                 }
             )
 
-        results.sort(key=lambda x: (x["games_count"], x["last_seen"] or date.min), reverse=True)
+        results.sort(
+            key=lambda x: (x["games_count"], x["last_seen"] or date.min),
+            reverse=True,
+        )
         return results
+
+    # ------------------------------------------------------------------
+    # Persistence
+    # ------------------------------------------------------------------
+
+    def refresh(self, db: Session, opponent_id: str) -> list[dict]:
+        """Recompute opening stats and persist them to the opening_stats table.
+
+        Wipes and replaces all rows for this opponent so the table always
+        reflects the current state of the games and engine_analyses data.
+        """
+        results = self._compute(db, opponent_id)
+
+        db.query(OpeningStat).filter(
+            OpeningStat.opponent_space_id == opponent_id
+        ).delete(synchronize_session=False)
+
+        for r in results:
+            db.add(
+                OpeningStat(
+                    opponent_space_id=opponent_id,
+                    eco=r["eco"],
+                    opening_name=r["opening_name"],
+                    color=r["color"],
+                    games_count=r["games_count"],
+                    wins=r["wins"],
+                    draws=r["draws"],
+                    losses=r["losses"],
+                    avg_centipawn_loss=r["avg_centipawn_loss"],
+                    blunder_rate=r["blunder_rate"],
+                    last_seen=r["last_seen"],
+                )
+            )
+
+        db.commit()
+        logger.info(
+            "opening_stats refreshed for opponent %s — %d buckets", opponent_id, len(results)
+        )
+        return results
+
+    # ------------------------------------------------------------------
+    # Read path
+    # ------------------------------------------------------------------
+
+    def get(self, db: Session, opponent_id: str) -> list[dict]:
+        """Return opening stats from the persisted table.
+
+        If the table has no rows for this opponent (first call after import,
+        or before any analysis has run) fall back to a live refresh so the
+        caller always gets a result.
+        """
+        rows = list(
+            db.scalars(
+                select(OpeningStat)
+                .where(OpeningStat.opponent_space_id == opponent_id)
+                .order_by(
+                    OpeningStat.games_count.desc(),
+                    OpeningStat.last_seen.desc().nullslast(),
+                )
+            ).all()
+        )
+
+        if not rows:
+            return self.refresh(db, opponent_id)
+
+        return [
+            {
+                "opening_name": row.opening_name,
+                "eco": row.eco,
+                "color": row.color,
+                "games_count": row.games_count,
+                "wins": row.wins,
+                "draws": row.draws,
+                "losses": row.losses,
+                "last_seen": row.last_seen,
+                "avg_centipawn_loss": row.avg_centipawn_loss,
+                "blunder_rate": row.blunder_rate,
+            }
+            for row in rows
+        ]
+
+    # Backwards-compatible shim — existing callers that use .compute() keep working
+    def compute(self, db: Session, opponent_id: str) -> list[dict]:
+        return self.get(db, opponent_id)

@@ -14,6 +14,9 @@ class GameRead(BaseModel):
     source_game_id: Optional[str]
     white_name: str
     black_name: str
+    white_rating: Optional[int]
+    black_rating: Optional[int]
+    rated: Optional[bool]
     result: str
     date_played: Optional[date]
     time_control: Optional[str]
@@ -36,6 +39,9 @@ class MoveFactRead(BaseModel):
     fen_after: str
     phase: Phase
     is_book: bool
+    clock_before_ms: Optional[int]
+    clock_after_ms: Optional[int]
+    movetime_ms: Optional[int]
 
 
 class EngineAnalysisRead(BaseModel):
@@ -54,6 +60,8 @@ class EngineAnalysisRead(BaseModel):
     classification: Optional[MoveClassification]
     principal_variation: Optional[dict[str, Any]]
     depth: Optional[int]
+    engine_name: Optional[str]
+    engine_version: Optional[str]
 
 
 class AnalyzeGameRequest(BaseModel):

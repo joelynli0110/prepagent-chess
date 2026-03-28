@@ -7,10 +7,10 @@ from sqlalchemy.orm import Session
 from app.db.models import Job, JobStatus, JobType, OpponentSpace
 from app.dependencies import get_db
 from app.schemas.jobs import JobRead
-from app.services.imports.chessbase_fetcher import fetch_pgn
+from app.services.imports.chessbase_fetcher import fetch_pgn, parse_player_slug
 from app.services.imports.lichess_fetcher import fetch_pgn as lichess_fetch_pgn
 from app.services.imports.chesscom_fetcher import fetch_pgn as chesscom_fetch_pgn
-from app.services.imports.platform_search import search_all
+from app.services.imports.platform_search import build_player_profile, search_all
 from app.services.jobs.import_jobs import process_pgn_import_job
 
 router = APIRouter(prefix="/opponents/{opponent_id}/imports", tags=["imports"])
@@ -146,6 +146,136 @@ def import_lichess(
 
     background_tasks.add_task(_run_import_job, job.id, opponent_id, pgn_text, "lichess")
     return job
+
+
+def _derive_chessbase_slug(display_name: str) -> str | None:
+    """'Magnus Carlsen' → 'Carlsen_Magnus' (ChessBase slug format)."""
+    parts = display_name.replace(",", " ").split()
+    parts = [p.strip() for p in parts if p.strip()]
+    if len(parts) >= 2:
+        return f"{parts[-1].title()}_{parts[0].title()}"
+    return None
+
+
+def _run_auto_platform_import(job_id: str, opponent_id: str, platform: str, username: str) -> None:
+    from app.db.session import SessionLocal
+    db = SessionLocal()
+    try:
+        job = db.get(Job, job_id)
+        if not job:
+            return
+        try:
+            if platform == "lichess":
+                pgn_text = lichess_fetch_pgn(username, max_games=200)
+            else:
+                pgn_text = chesscom_fetch_pgn(username, max_games=200)
+            if not pgn_text.strip():
+                job.status = JobStatus.failed
+                job.result = {"error": f"No games found for {platform} user {username!r}"}
+                db.commit()
+                return
+            process_pgn_import_job(db, job, opponent_id, pgn_text, source=platform)
+        except Exception as exc:
+            job.status = JobStatus.failed
+            job.result = {"error": str(exc)}
+            db.commit()
+    finally:
+        db.close()
+
+
+def _run_auto_chessbase_import(job_id: str, opponent_id: str, slug: str) -> None:
+    from app.db.session import SessionLocal
+    db = SessionLocal()
+    try:
+        job = db.get(Job, job_id)
+        if not job:
+            return
+        try:
+            _, pgn_text = fetch_pgn(slug)
+            process_pgn_import_job(db, job, opponent_id, pgn_text, source="chessbase")
+        except Exception as exc:
+            job.status = JobStatus.failed
+            job.result = {"error": str(exc)}
+            db.commit()
+    finally:
+        db.close()
+
+
+@router.get("/jobs", response_model=list[JobRead])
+def list_import_jobs(opponent_id: str, db: Session = Depends(get_db)) -> list[Job]:
+    """Return all import jobs for this opponent, newest first."""
+    opponent = db.get(OpponentSpace, opponent_id)
+    if not opponent:
+        raise HTTPException(status_code=404, detail="Opponent space not found")
+    return sorted(opponent.jobs, key=lambda j: j.created_at, reverse=True)
+
+
+@router.post("/auto", response_model=list[JobRead])
+def import_auto(
+    opponent_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> list[Job]:
+    """
+    One-shot import: derive ChessBase slug from the opponent name, search
+    Chess.com and Lichess for verified/titled accounts, and kick off a
+    background import job for every source found.
+    """
+    opponent = db.get(OpponentSpace, opponent_id)
+    if not opponent:
+        raise HTTPException(status_code=404, detail="Opponent space not found")
+
+    created_jobs: list[Job] = []
+
+    # ChessBase — slug derived from name, no network call needed
+    slug = _derive_chessbase_slug(opponent.display_name)
+    if slug:
+        job = Job(
+            opponent_space_id=opponent_id,
+            job_type=JobType.import_pgn,
+            status=JobStatus.queued,
+            payload={"source": "chessbase", "slug": slug},
+        )
+        db.add(job)
+        db.flush()
+        created_jobs.append(job)
+        background_tasks.add_task(_run_auto_chessbase_import, job.id, opponent_id, slug)
+
+    # Chess.com + Lichess — network search, returns only verified/titled players
+    accounts = search_all(opponent.display_name)
+    for acc in accounts:
+        platform = acc["platform"]
+        username = acc["username"]
+        job = Job(
+            opponent_space_id=opponent_id,
+            job_type=JobType.import_pgn,
+            status=JobStatus.queued,
+            payload={"source": platform, "username": username},
+        )
+        db.add(job)
+        db.flush()
+        created_jobs.append(job)
+        background_tasks.add_task(
+            _run_auto_platform_import, job.id, opponent_id, platform, username
+        )
+
+    db.commit()
+    for job in created_jobs:
+        db.refresh(job)
+
+    # Build and store player profile (FIDE + Chess.com)
+    _store_player_profile(db, opponent)
+
+    return created_jobs
+
+
+def _store_player_profile(db: Session, opponent: OpponentSpace) -> None:
+    """Fetch profile data from FIDE + Chess.com and persist it on the opponent."""
+    profile = build_player_profile(opponent.display_name)
+    if not profile:
+        return
+    opponent.profile_data = profile
+    db.commit()
 
 
 @router.post("/chesscom", response_model=JobRead)

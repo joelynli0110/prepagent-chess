@@ -21,9 +21,10 @@ def fetch_pgn(username: str, max_games: int = 100) -> str:
     params = urllib.parse.urlencode({
         "max": max_games,
         "perfType": "bullet,blitz,rapid,classical",
-        "clocks": "false",
+        "clocks": "true",
         "evals": "false",
         "opening": "true",
+        "rated": "true",
     })
     url = f"{_BASE}/{urllib.parse.quote(username)}?{params}"
     req = urllib.request.Request(url, headers=_HEADERS)

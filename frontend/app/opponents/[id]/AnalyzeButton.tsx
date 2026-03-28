@@ -10,7 +10,7 @@ type JobStatus = "queued" | "running" | "completed" | "failed";
 interface Job {
   id: string;
   status: JobStatus;
-  result?: { analyzed_games?: number; analyzed_positions?: number; error?: string } | null;
+  result?: { analyzed_games?: number; total_games?: number; analyzed_positions?: number; error?: string } | null;
 }
 
 export function AnalyzeButton({ opponentId }: { opponentId: string }) {
@@ -26,7 +26,7 @@ export function AnalyzeButton({ opponentId }: { opponentId: string }) {
       const res = await fetch(`${API_BASE}/opponents/${opponentId}/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ depth: 10, max_games: 20, max_plies: 40, only_missing: false }),
+        body: JSON.stringify({ depth: 10, only_missing: true }),
       });
 
       if (!res.ok) {
@@ -55,12 +55,16 @@ export function AnalyzeButton({ opponentId }: { opponentId: string }) {
           setStatus("completed");
           const g = job.result?.analyzed_games ?? 0;
           const p = job.result?.analyzed_positions ?? 0;
-          setMessage(`Analyzed ${g} game(s), ${p} position(s).`);
+          setMessage(`Done — ${g} game(s), ${p} position(s).`);
           router.refresh();
         } else if (job.status === "failed") {
           clearInterval(interval);
           setStatus("failed");
           setMessage(job.result?.error ?? "Analysis failed.");
+        } else if (job.status === "running" && job.result?.total_games) {
+          const g = job.result.analyzed_games ?? 0;
+          const t = job.result.total_games;
+          setMessage(`${g} / ${t} games…`);
         }
       } catch {
         // network hiccup — keep polling

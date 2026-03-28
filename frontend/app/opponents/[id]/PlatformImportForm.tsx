@@ -10,7 +10,9 @@ interface PlatformAccount {
   username: string;
   real_name?: string | null;
   title?: string | null;
-  verified?: boolean;
+  country?: string | null;
+  birth_year?: number | null;
+  fide_url?: string | null;
   url: string;
 }
 
@@ -142,16 +144,33 @@ export function PlatformImportForm({ opponentId }: { opponentId: string }) {
                       >
                         {acc.username}
                       </a>
-                      {acc.verified && (
-                        <span className="text-xs text-blue-500">✓</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                      {acc.real_name && (
+                        <span className="text-xs text-gray-500">{acc.real_name}</span>
+                      )}
+                      {acc.country && (
+                        <span className="text-xs text-gray-400">{acc.country}</span>
+                      )}
+                      {acc.birth_year && (
+                        <span className="text-xs text-gray-400">
+                          b. {acc.birth_year}
+                        </span>
+                      )}
+                      {acc.fide_url && (
+                        <a
+                          href={acc.fide_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-500 hover:underline"
+                        >
+                          FIDE
+                        </a>
                       )}
                     </div>
-                    {acc.real_name && (
-                      <div className="text-xs text-gray-400">{acc.real_name}</div>
-                    )}
                     {msg && (
                       <div
-                        className={`text-xs ${
+                        className={`text-xs mt-0.5 ${
                           state === "error" ? "text-red-500" : "text-gray-400"
                         }`}
                       >

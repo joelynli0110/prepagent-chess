@@ -1,11 +1,30 @@
 export type Side = "white" | "black";
 export type Phase = "opening" | "middlegame" | "endgame";
 
+export interface PlayerProfile {
+  photo_url?: string | null;
+  name?: string | null;
+  nationality?: string | null;
+  federation?: string | null;
+  birth_year?: number | null;
+  age?: number | null;
+  gender?: string | null;
+  title?: string | null;
+  rating_std?: number | null;
+  rating_rapid?: number | null;
+  rating_blitz?: number | null;
+  fide_id?: number | null;
+  chessbase_id?: number | null;
+  chessbase_url?: string | null;
+  fide_url?: string | null;
+}
+
 export interface OpponentSpace {
   id: string;
   display_name: string;
   canonical_name: string;
   notes?: string | null;
+  profile_data?: PlayerProfile | null;
   created_at: string;
 }
 
@@ -61,6 +80,101 @@ export interface MoveFact {
   fen_after: string;
   phase: Phase;
   is_book: boolean;
+}
+
+export interface StrategyPlan {
+  focus_areas?: string[];
+  target_openings?: string[];
+  avoid_openings?: string[];
+  phase_weakness?: string;
+  risk_notes?: string;
+  prep_priority?: string;
+  raw?: string;
+}
+
+export interface ScoutingReport {
+  preferred_time_control?: string;
+  time_pressure_sensitivity?: "high" | "medium" | "low";
+  time_pressure_insight?: string;
+  strongest_bracket?: string;
+  weakest_bracket?: string;
+  rating_insight?: string;
+  key_findings?: string[];
+  raw?: string;
+}
+
+export interface PatternReport {
+  structural_tendencies?: string[];
+  book_deviation_habit?: string;
+  dominant_phase_weakness?: string;
+  recurring_error_patterns?: string[];
+  exploit_positions?: string[];
+  opening_depth_assessment?: string;
+  raw?: string;
+}
+
+export interface PsychologyReport {
+  color_preference?: string;
+  color_insight?: string;
+  psychological_profile?: string;
+  comfort_zone_openings?: string[];
+  discomfort_zone_openings?: string[];
+  critical_move_range?: string;
+  fatigue_pattern?: string | null;
+  fatigue_insight?: string | null;
+  exploit_strategy?: string;
+  raw?: string;
+}
+
+export interface OpeningTreeStats {
+  games: number;
+  win_pct: number;
+  avg_cpl?: number | null;
+  blunder_rate?: number;
+}
+
+export interface OpeningTreeEntry {
+  eco?: string;
+  opening_name?: string;
+  action?: "steer_toward" | "avoid" | "surprise_weapon";
+  reason?: string;
+  key_moment?: string | null;
+  stats?: OpeningTreeStats;
+  children?: OpeningTreeEntry[];
+}
+
+export type ReportStatus = "draft" | "awaiting_review" | "running" | "ready" | "failed";
+
+export interface ReportContent {
+  thread_id?: string;
+  risk_mode?: string;
+  plan?: StrategyPlan;
+  // Per-agent progress (written after each node completes)
+  current_agent?: string | null;
+  current_agent_label?: string | null;
+  scouting_done?: boolean;
+  pattern_done?: boolean;
+  psychology_done?: boolean;
+  synthesis_done?: boolean;
+  // Agent outputs
+  scouting_report?: ScoutingReport;
+  pattern_report?: PatternReport;
+  psychology_report?: PsychologyReport;
+  opening_tree?: OpeningTreeEntry[];
+  opening_stats?: object[];
+  critical_positions?: object[];
+  narrative?: string;
+  markdown?: string;
+  error?: string;
+}
+
+export interface Report {
+  id: string;
+  opponent_space_id: string;
+  title: string;
+  status: ReportStatus;
+  content?: ReportContent | null;
+  created_at: string;
 }
 
 export interface EngineAnalysis {

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -17,4 +17,5 @@ class OpponentSpaceRead(BaseModel):
     display_name: str
     canonical_name: str
     notes: Optional[str]
+    profile_data: Optional[dict[str, Any]] = None
     created_at: datetime

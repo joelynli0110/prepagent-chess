@@ -34,8 +34,6 @@ class BlunderSummaryRead(BaseModel):
 
 class OpponentAnalyzeRequest(BaseModel):
     depth: int = 10
-    max_games: Optional[int] = None
-    max_plies: Optional[int] = None
     only_missing: bool = True
 
 

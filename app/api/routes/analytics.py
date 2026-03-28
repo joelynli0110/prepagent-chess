@@ -16,6 +16,8 @@ from app.services.engine.analysis_service import AnalysisService
 from app.services.opponents.identity import OpponentIdentityService
 from app.services.parsing.opening_utils import detect_opening_from_moves
 
+_opening_stats_service = OpeningStatsService()
+
 router = APIRouter(prefix="/opponents/{opponent_id}", tags=["analytics"])
 
 
@@ -70,10 +72,12 @@ def _run_analysis(job_id: str, opponent_id: str, payload_dict: dict) -> None:
             db=db,
             opponent_id=opponent_id,
             depth=payload_dict["depth"],
-            max_games=payload_dict.get("max_games"),
-            max_plies=payload_dict.get("max_plies"),
             only_missing=payload_dict.get("only_missing", True),
+            job=job,
         )
+
+        # Refresh persisted opening stats now that engine data is available
+        _opening_stats_service.refresh(db, opponent_id)
 
         job.status = JobStatus.completed
         job.result = {
@@ -125,9 +129,16 @@ def get_openings(opponent_id: str, db: Session = Depends(get_db)) -> list[dict]:
     opponent = db.get(OpponentSpace, opponent_id)
     if not opponent:
         raise HTTPException(status_code=404, detail="Opponent space not found")
+    return _opening_stats_service.get(db, opponent_id)
 
-    service = OpeningStatsService()
-    return service.compute(db, opponent_id)
+
+@router.post("/openings/refresh", response_model=list[OpeningStatRead])
+def refresh_openings(opponent_id: str, db: Session = Depends(get_db)) -> list[dict]:
+    """Recompute and persist opening stats from current games + analysis data."""
+    opponent = db.get(OpponentSpace, opponent_id)
+    if not opponent:
+        raise HTTPException(status_code=404, detail="Opponent space not found")
+    return _opening_stats_service.refresh(db, opponent_id)
 
 
 @router.get("/blunders", response_model=list[BlunderSummaryRead])

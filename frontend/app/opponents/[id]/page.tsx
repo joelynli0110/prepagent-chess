@@ -7,10 +7,11 @@ import {
   OpponentSpace,
 } from "@/lib/types";
 import { AnalyzeButton } from "./AnalyzeButton";
-import { ChessbaseFetchForm } from "./ChessbaseFetchForm";
 import { DeleteOpponentButton } from "./DeleteOpponentButton";
-import { PlatformImportForm } from "./PlatformImportForm";
-import { UploadPgnForm } from "./UploadPgnForm";
+import { ImportJobsStatus } from "./ImportJobsStatus";
+import { ImportSection } from "./ImportSection";
+import { PlayerProfileCard } from "./PlayerProfileCard";
+import { ReportSection } from "./ReportSection";
 
 function winRate(row: OpeningStat) {
   if (!row.games_count) return null;
@@ -61,15 +62,12 @@ export default async function OpponentDetailPage({
 
       {/* Header */}
       <section className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">{opponent.display_name}</h1>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <AnalyzeButton opponentId={id} />
-          <DeleteOpponentButton opponentId={id} opponentName={opponent.display_name} />
-        </div>
+        <h1 className="text-2xl font-semibold">{opponent.display_name}</h1>
+        <AnalyzeButton opponentId={id} />
       </section>
+
+      {/* Player profile */}
+      <PlayerProfileCard opponentId={id} profile={opponent.profile_data} />
 
       {/* Stat cards */}
       <section className="grid gap-4 sm:grid-cols-3">
@@ -77,22 +75,87 @@ export default async function OpponentDetailPage({
           <div className="text-sm text-gray-500">Games</div>
           <div className="mt-1 text-2xl font-semibold">{games.length}</div>
         </div>
-        <div className="rounded-2xl border p-4">
-          <div className="text-sm text-gray-500">Opening buckets</div>
-          <div className="mt-1 text-2xl font-semibold">{openings.length}</div>
-        </div>
-        <div className="rounded-2xl border p-4">
-          <div className="text-sm text-gray-500">Blunder patterns</div>
-          <div className="mt-1 text-2xl font-semibold">{blunders.length}</div>
-        </div>
       </section>
 
       {/* Import */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <UploadPgnForm opponentId={id} />
-        <ChessbaseFetchForm opponentId={id} />
-      </div>
-      <PlatformImportForm opponentId={id} />
+      <ImportSection opponentId={id} />
+
+      {/* Active import jobs */}
+      <ImportJobsStatus opponentId={id} />
+
+      {/* Games list */}
+      <section className="space-y-3">
+        <h2 className="text-xl font-semibold">
+          Games{" "}
+          {analyzedGames.length > 0 && analyzedGames.length < games.length && (
+            <span className="text-sm font-normal text-gray-400">
+              ({analyzedGames.length} analyzed)
+            </span>
+          )}
+        </h2>
+        <div className="overflow-hidden rounded-2xl border">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+              <tr>
+                <th className="p-3 text-left">White</th>
+                <th className="p-3 text-left">Black</th>
+                <th className="p-3 text-left">Result</th>
+                <th className="p-3 text-left">ECO</th>
+                <th className="p-3 text-left">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {games.length === 0 ? (
+                <tr className="border-t">
+                  <td className="p-3 text-gray-400" colSpan={5}>
+                    No games yet. Upload a PGN above.
+                  </td>
+                </tr>
+              ) : (
+                games.slice(0, 25).map((game) => (
+                  <tr key={game.id} className="border-t hover:bg-gray-50">
+                    <td className="p-3 font-medium">
+                      <Link href={`/opponents/${id}/games/${game.id}`} className="hover:underline text-gray-900">
+                        {game.white_name}
+                      </Link>
+                    </td>
+                    <td className="p-3 font-medium">
+                      <Link href={`/opponents/${id}/games/${game.id}`} className="hover:underline text-gray-900">
+                        {game.black_name}
+                      </Link>
+                    </td>
+                    <td className="p-3">
+                      <Link href={`/opponents/${id}/games/${game.id}`} className="hover:underline">
+                        <span
+                          className={
+                            game.result === "1-0"
+                              ? "text-green-700 font-medium"
+                              : game.result === "0-1"
+                                ? "text-red-600 font-medium"
+                                : "text-gray-500"
+                          }
+                        >
+                          {game.result}
+                        </span>
+                      </Link>
+                    </td>
+                    <td className="p-3">
+                      <Link href={`/opponents/${id}/games/${game.id}`} className="hover:underline">
+                        <span className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-500">
+                          {game.eco ?? "—"}
+                        </span>
+                      </Link>
+                    </td>
+                    <td className="p-3 text-gray-400 tabular-nums">
+                      {game.date_played ?? "—"}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       {/* Top Openings */}
       <section className="space-y-3">
@@ -276,54 +339,12 @@ export default async function OpponentDetailPage({
         </div>
       </section>
 
-      {/* Games list */}
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">
-          Games{" "}
-          {analyzedGames.length > 0 && analyzedGames.length < games.length && (
-            <span className="text-sm font-normal text-gray-400">
-              ({analyzedGames.length} analyzed)
-            </span>
-          )}
-        </h2>
-        <div className="space-y-2">
-          {games.length === 0 ? (
-            <div className="rounded-2xl border p-6 text-sm text-gray-500">
-              No games yet. Upload a PGN above.
-            </div>
-          ) : (
-            games.slice(0, 25).map((game) => (
-              <Link
-                key={game.id}
-                href={`/opponents/${id}/games/${game.id}`}
-                className="flex items-center justify-between rounded-xl border p-4 hover:bg-gray-50"
-              >
-                <div>
-                  <div className="font-medium">
-                    {game.white_name} vs {game.black_name}
-                  </div>
-                  <div className="mt-0.5 text-sm text-gray-500">
-                    {game.opening_name ?? "Unknown opening"}
-                    {game.date_played ? ` · ${game.date_played}` : ""}
-                  </div>
-                </div>
-                <div className="ml-4 shrink-0 text-sm font-medium">
-                  <span
-                    className={
-                      game.result === "1-0"
-                        ? "text-green-700"
-                        : game.result === "0-1"
-                          ? "text-red-600"
-                          : "text-gray-500"
-                    }
-                  >
-                    {game.result}
-                  </span>
-                </div>
-              </Link>
-            ))
-          )}
-        </div>
+      {/* Prep Reports */}
+      <ReportSection opponentId={id} />
+
+      {/* Danger zone */}
+      <section className="border-t pt-6">
+        <DeleteOpponentButton opponentId={id} opponentName={opponent.display_name} />
       </section>
     </main>
   );

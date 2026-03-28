@@ -11,6 +11,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     Enum as SAEnum,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -68,6 +69,7 @@ class OpponentSpace(Base):
     display_name: Mapped[str] = mapped_column(String(255), index=True)
     canonical_name: Mapped[str] = mapped_column(String(255), index=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    profile_data: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     games: Mapped[list["Game"]] = relationship(
@@ -93,6 +95,9 @@ class Game(Base):
 
     white_name: Mapped[str] = mapped_column(String(255))
     black_name: Mapped[str] = mapped_column(String(255))
+    white_rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    black_rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    rated: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     result: Mapped[str] = mapped_column(String(20))
     date_played: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     time_control: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -101,6 +106,7 @@ class Game(Base):
     pgn_text: Mapped[str] = mapped_column(Text)
     total_plies: Mapped[int] = mapped_column(Integer, default=0)
 
+    round: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     opponent_name_in_game: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     opponent_side: Mapped[Optional[Side]] = mapped_column(SAEnum(Side), nullable=True, index=True)
 
@@ -131,6 +137,9 @@ class MoveFact(Base):
     fen_after: Mapped[str] = mapped_column(Text)
     phase: Mapped[Phase] = mapped_column(SAEnum(Phase), default=Phase.opening)
     is_book: Mapped[bool] = mapped_column(Boolean, default=False)
+    clock_before_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    clock_after_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    movetime_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     game: Mapped["Game"] = relationship(back_populates="moves")
 
@@ -154,6 +163,8 @@ class EngineAnalysis(Base):
     )
     principal_variation: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
     depth: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    engine_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    engine_version: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     game: Mapped["Game"] = relationship(back_populates="engine_analyses")
@@ -171,3 +182,83 @@ class Job(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     opponent_space: Mapped["OpponentSpace"] = relationship(back_populates="jobs")
+
+
+class OpeningStat(Base):
+    """Materialized per-opponent opening aggregate, refreshed after each analysis run."""
+    __tablename__ = "opening_stats"
+    __table_args__ = (
+        UniqueConstraint("opponent_space_id", "eco", "opening_name", "color", name="uq_opening_stats_key"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    opponent_space_id: Mapped[str] = mapped_column(ForeignKey("opponent_spaces.id"), index=True)
+    eco: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    opening_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    color: Mapped[Side] = mapped_column(SAEnum(Side))
+    games_count: Mapped[int] = mapped_column(Integer, default=0)
+    wins: Mapped[int] = mapped_column(Integer, default=0)
+    draws: Mapped[int] = mapped_column(Integer, default=0)
+    losses: Mapped[int] = mapped_column(Integer, default=0)
+    avg_centipawn_loss: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    blunder_rate: Mapped[float] = mapped_column(Float, default=0.0)
+    last_seen: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    opponent_space: Mapped["OpponentSpace"] = relationship()
+
+
+class BlunderEvent(Base):
+    """One row per blunder move observed in a game."""
+    __tablename__ = "blunder_events"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    game_id: Mapped[str] = mapped_column(ForeignKey("games.id"), index=True)
+    opponent_space_id: Mapped[str] = mapped_column(ForeignKey("opponent_spaces.id"), index=True)
+    ply: Mapped[int] = mapped_column(Integer)
+    phase: Mapped[Optional[Phase]] = mapped_column(SAEnum(Phase), nullable=True)
+    eco: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    opening_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    side: Mapped[Optional[Side]] = mapped_column(SAEnum(Side), nullable=True)
+    centipawn_loss: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    move_san: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    move_uci: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    best_move_san: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    best_move_uci: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    fen_before: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    game: Mapped["Game"] = relationship()
+    opponent_space: Mapped["OpponentSpace"] = relationship()
+
+
+class Report(Base):
+    """Generated preparation report for an opponent."""
+    __tablename__ = "reports"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    opponent_space_id: Mapped[str] = mapped_column(ForeignKey("opponent_spaces.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    content: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="draft")  # draft | ready | failed
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    opponent_space: Mapped["OpponentSpace"] = relationship()
+
+
+class ExternalAccount(Base):
+    """A platform account (lichess/chess.com) linked to an opponent space."""
+    __tablename__ = "external_accounts"
+    __table_args__ = (
+        UniqueConstraint("opponent_space_id", "platform", "username", name="uq_external_accounts_key"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    opponent_space_id: Mapped[str] = mapped_column(ForeignKey("opponent_spaces.id"), index=True)
+    platform: Mapped[Platform] = mapped_column(SAEnum(Platform))
+    username: Mapped[str] = mapped_column(String(255))
+    last_synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    meta: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    opponent_space: Mapped["OpponentSpace"] = relationship()
