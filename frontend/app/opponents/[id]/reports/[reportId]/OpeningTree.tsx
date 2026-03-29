@@ -8,9 +8,9 @@ import { OpeningTreeEntry, OpeningTreeStats } from "@/lib/types";
 // ---------------------------------------------------------------------------
 
 const ACTION = {
-  steer_toward:    { label: "Steer toward", bg: "bg-red-50 text-red-700 border border-red-100" },
+  steer_toward:    { label: "Steer toward", bg: "bg-gray-100 text-gray-600" },
   avoid:           { label: "Avoid",         bg: "bg-gray-100 text-gray-500" },
-  surprise_weapon: { label: "Surprise",      bg: "bg-blue-50 text-blue-700 border border-blue-100" },
+  surprise_weapon: { label: "Surprise",      bg: "bg-gray-100 text-gray-600" },
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -18,18 +18,13 @@ const ACTION = {
 // ---------------------------------------------------------------------------
 
 function StatsBadge({ stats }: { stats: OpeningTreeStats }) {
-  const winColor =
-    stats.win_pct >= 60 ? "text-green-600" :
-    stats.win_pct <= 35 ? "text-red-500" :
-    "text-gray-600";
-
   return (
     <div className="flex items-center gap-3 text-xs text-gray-400 shrink-0">
       <span>
         <span className="font-medium text-gray-500">{stats.games}</span> games
       </span>
       <span>
-        Win <span className={`font-medium ${winColor}`}>{stats.win_pct}%</span>
+        Win <span className="font-medium text-gray-600">{stats.win_pct}%</span>
       </span>
       {stats.avg_cpl != null && (
         <span>
@@ -38,7 +33,7 @@ function StatsBadge({ stats }: { stats: OpeningTreeStats }) {
       )}
       {stats.blunder_rate != null && (
         <span>
-          Blunders <span className="font-medium text-orange-500">{stats.blunder_rate}%</span>
+          Blunders <span className="font-medium text-gray-600">{stats.blunder_rate}%</span>
         </span>
       )}
     </div>
@@ -50,13 +45,9 @@ function StatsBadge({ stats }: { stats: OpeningTreeStats }) {
 // ---------------------------------------------------------------------------
 
 function WinBar({ win_pct }: { win_pct: number }) {
-  const color =
-    win_pct >= 60 ? "bg-green-400" :
-    win_pct <= 35 ? "bg-red-400" :
-    "bg-gray-300";
   return (
     <div className="h-1 w-16 rounded-full bg-gray-100 overflow-hidden shrink-0">
-      <div className={`h-full rounded-full ${color}`} style={{ width: `${win_pct}%` }} />
+      <div className="h-full rounded-full bg-gray-400" style={{ width: `${win_pct}%` }} />
     </div>
   );
 }
@@ -211,16 +202,11 @@ function GroupPanel({
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
-  const headerColor =
-    label === "Steer toward"    ? "bg-red-50 text-red-700" :
-    label === "Surprise weapons" ? "bg-blue-50 text-blue-700" :
-    "bg-gray-50 text-gray-600";
-
   return (
     <div className="overflow-hidden rounded-2xl border">
       <button
         onClick={() => setOpen((o) => !o)}
-        className={`flex w-full items-center justify-between px-5 py-3 text-sm font-medium ${headerColor}`}
+        className="flex w-full items-center justify-between px-5 py-3 text-sm font-medium bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors"
       >
         <span>{label}</span>
         <svg

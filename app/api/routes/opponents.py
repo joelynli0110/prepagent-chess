@@ -35,17 +35,12 @@ def get_opponent(opponent_id: str, db: Session = Depends(get_db)) -> OpponentSpa
     return opponent
 
 
-@router.post("/{opponent_id}/profile/refresh", response_model=OpponentSpaceRead)
-def refresh_profile(opponent_id: str, db: Session = Depends(get_db)) -> OpponentSpace:
-    """Re-fetch and store profile data from FIDE + Chess.com."""
-    from app.api.routes.imports import _store_player_profile
 
-    opponent = db.get(OpponentSpace, opponent_id)
-    if not opponent:
-        raise HTTPException(status_code=404, detail="Opponent space not found")
-    _store_player_profile(db, opponent)
-    db.refresh(opponent)
-    return opponent
+@router.delete("", status_code=204)
+def delete_all_opponents(db: Session = Depends(get_db)) -> None:
+    for opponent in db.scalars(select(OpponentSpace)).all():
+        db.delete(opponent)
+    db.commit()
 
 
 @router.delete("/{opponent_id}", status_code=204)

@@ -8,16 +8,16 @@ from typing import Optional
 
 
 _PGN_BASE = "https://players.chessbase.com/games"
+_PLAYER_BASE = "https://players.chessbase.com/en/player"
 
-_HEADERS = {
+_BASE_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://players.chessbase.com/",
+    "Origin": "https://players.chessbase.com",
 }
 
 
@@ -54,8 +54,14 @@ def fetch_pgn(player_url: str) -> tuple[str, str]:
     """
     slug = parse_player_slug(player_url)
     pgn_url = f"{_PGN_BASE}/{slug}.pgn"
+    player_page_url = f"{_PLAYER_BASE}/{slug}"
 
-    req = urllib.request.Request(pgn_url, headers=_HEADERS)
+    headers = {
+        **_BASE_HEADERS,
+        "Accept": "application/x-chess-pgn, text/plain, */*;q=0.5",
+        "Referer": player_page_url,
+    }
+    req = urllib.request.Request(pgn_url, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             raw = resp.read()
@@ -70,6 +76,13 @@ def fetch_pgn(player_url: str) -> tuple[str, str]:
     except UnicodeDecodeError:
         pgn_text = raw.decode("latin-1")
 
+    # Guard against Cloudflare/bot-challenge HTML responses
+    if not pgn_text.lstrip().startswith("["):
+        raise ValueError(
+            f"ChessBase returned non-PGN content for {pgn_url!r} "
+            "(possible bot-protection page — try again later)"
+        )
+
     return slug, pgn_text
 
 
@@ -80,7 +93,12 @@ def fetch_player_profile(slug: str) -> Optional[dict]:
     fide_id, chessbase_id, and chessbase_url — or None on failure.
     """
     url = f"https://players.chessbase.com/en/player/{slug}"
-    req = urllib.request.Request(url, headers=_HEADERS)
+    page_headers = {
+        **_BASE_HEADERS,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Referer": "https://players.chessbase.com/",
+    }
+    req = urllib.request.Request(url, headers=page_headers)
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             html = resp.read().decode("utf-8")

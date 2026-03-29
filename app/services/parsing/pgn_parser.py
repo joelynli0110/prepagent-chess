@@ -46,9 +46,14 @@ def _parse_clock_ms(comment: str) -> Optional[int]:
 
 
 def _extract_source_game_id(headers: chess.pgn.Headers) -> Optional[str]:
-    """Derive a platform game ID from the PGN Site header."""
+    """Derive a platform game ID from the PGN Site header.
+
+    Only URLs (containing '://') are treated as unique game identifiers.
+    Plain city/venue names (e.g. 'Madrid', 'Wijk aan Zee') are not unique
+    and would cause all games from the same location to be deduped to one.
+    """
     site = headers.get("Site", "")
-    if not site:
+    if not site or "://" not in site:
         return None
     # Strip query string / fragment, split on '/', drop empty segments
     path = site.split("?")[0].split("#")[0].rstrip("/")
@@ -123,6 +128,8 @@ def parse_single_game(game: chess.pgn.Game, raw_pgn_text: str) -> dict[str, Any]
 
     eco = headers.get("ECO") if headers.get("ECO") not in {None, "?"} else None
     opening_name = headers.get("Opening") if headers.get("Opening") not in {None, "?"} else None
+    event_raw = (headers.get("Event") or "").strip()
+    event = event_raw if event_raw not in {"", "?", "-", "?"} else None
 
     # Always run the position-based book lookup — it gives exact variation names
     # (e.g. "Sicilian Defense: Najdorf Variation") which are more specific than
@@ -168,6 +175,7 @@ def parse_single_game(game: chess.pgn.Game, raw_pgn_text: str) -> dict[str, Any]
         "time_control": headers.get("TimeControl") if headers.get("TimeControl") not in {None, "?"} else None,
         "eco": eco,
         "opening_name": opening_name,
+        "event": event,
         "round": round_num,
         "pgn_text": raw_pgn_text,
         "moves": moves,

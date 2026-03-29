@@ -48,6 +48,7 @@ def process_pgn_import_job(db: Session, job: Job, opponent_space_id: str, pgn_te
             time_control=parsed["time_control"],
             eco=parsed["eco"],
             opening_name=parsed["opening_name"],
+            event=parsed.get("event"),
             round=parsed.get("round"),
             pgn_text=parsed["pgn_text"],
             total_plies=len(parsed["moves"]),

@@ -18,6 +18,10 @@ class ChatRequest(BaseModel):
     message: str
 
 
+class TranslateRequest(BaseModel):
+    target_language: str
+
+
 class ReportRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

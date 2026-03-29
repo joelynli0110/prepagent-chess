@@ -6,6 +6,7 @@ export interface PlayerProfile {
   name?: string | null;
   nationality?: string | null;
   federation?: string | null;
+  federation_iso2?: string | null;
   birth_year?: number | null;
   age?: number | null;
   gender?: string | null;
@@ -39,6 +40,8 @@ export interface Game {
   time_control?: string | null;
   eco?: string | null;
   opening_name?: string | null;
+  event?: string | null;
+  opponent_side?: Side | null;
   total_plies: number;
 }
 

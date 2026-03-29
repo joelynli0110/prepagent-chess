@@ -21,19 +21,16 @@ export function AnalyzeButton({ opponentId }: { opponentId: string }) {
   async function startAnalysis() {
     setStatus("queued");
     setMessage(null);
-
     try {
       const res = await fetch(`${API_BASE}/opponents/${opponentId}/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ depth: 10, only_missing: true }),
       });
-
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.detail ?? `Request failed: ${res.status}`);
       }
-
       const job: Job = await res.json();
       setStatus("running");
       poll(job.id);
@@ -49,7 +46,6 @@ export function AnalyzeButton({ opponentId }: { opponentId: string }) {
         const res = await fetch(`${API_BASE}/jobs/${jobId}`);
         if (!res.ok) return;
         const job: Job = await res.json();
-
         if (job.status === "completed") {
           clearInterval(interval);
           setStatus("completed");
@@ -66,26 +62,23 @@ export function AnalyzeButton({ opponentId }: { opponentId: string }) {
           const t = job.result.total_games;
           setMessage(`${g} / ${t} games…`);
         }
-      } catch {
-        // network hiccup — keep polling
-      }
+      } catch { /* network hiccup */ }
     }, 2000);
   }
 
   const isRunning = status === "queued" || status === "running";
 
   return (
-    <div className="flex flex-col items-end gap-2">
+    <div className="flex flex-col items-end gap-1.5">
       <button
         onClick={startAnalysis}
         disabled={isRunning}
-        className="rounded-xl border px-4 py-2 text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
       >
         {isRunning ? "Analyzing…" : "Analyze opponent"}
       </button>
-
       {message && (
-        <p className={`text-xs ${status === "failed" ? "text-red-600" : "text-gray-500"}`}>
+        <p className={`text-xs ${status === "failed" ? "text-rose-600" : "text-gray-400"}`}>
           {message}
         </p>
       )}

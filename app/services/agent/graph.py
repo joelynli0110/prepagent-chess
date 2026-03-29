@@ -1,16 +1,12 @@
 """LangGraph pipeline for chess preparation report generation.
 
 Graph flow:
-  orchestrator ──[interrupt_before="scouting"]──► scouting (Scouting Agent)
-                                                       │
-                                                   pattern (Pattern Agent)
-                                                       │
-                                                  psychology (Psychology Agent)
-                                                       │
-                                                   synthesis (Synthesis Agent)
-                                                       │
-                                                      END
+  orchestrator ──[interrupt_before="scouting"]──► scouting   ─┐
+                                                ├─► pattern    ├─► synthesis ──► END
+                                                └─► psychology ─┘
 
+Scouting, pattern, and psychology run in parallel (fan-out / fan-in).
+Synthesis waits for all three to complete before writing the final report.
 The interrupt lets the user review and optionally adjust the strategy plan
 before the three specialist agents run.
 """
@@ -380,9 +376,13 @@ def build_prep_graph() -> StateGraph:
     g.add_node("synthesis",   synthesis_node)
 
     g.set_entry_point("orchestrator")
+    # Fan-out: all three specialist agents start simultaneously after approval
     g.add_edge("orchestrator", "scouting")
-    g.add_edge("scouting",     "pattern")
-    g.add_edge("pattern",      "psychology")
+    g.add_edge("orchestrator", "pattern")
+    g.add_edge("orchestrator", "psychology")
+    # Fan-in: synthesis waits for all three to complete
+    g.add_edge("scouting",     "synthesis")
+    g.add_edge("pattern",      "synthesis")
     g.add_edge("psychology",   "synthesis")
     g.add_edge("synthesis",    END)
 

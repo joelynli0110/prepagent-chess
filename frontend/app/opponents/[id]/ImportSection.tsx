@@ -13,35 +13,16 @@ function formatBytes(bytes: number) {
 
 export function ImportSection({ opponentId }: { opponentId: string }) {
   const router = useRouter();
-
-  // Import Games state
-  const [importing, setImporting] = useState(false);
-  const [importMsg, setImportMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
-  // Upload PGN state
   const [showUpload, setShowUpload] = useState(false);
+  const [showChesscom, setShowChesscom] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [chesscomUrl, setChesscomUrl] = useState("");
+  const [chesscomImporting, setChesscomImporting] = useState(false);
+  const [chesscomMsg, setChesscomMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
-
-  async function onImportGames() {
-    setImporting(true);
-    setImportMsg(null);
-    try {
-      const res = await fetch(`${API_BASE}/opponents/${opponentId}/imports/auto`, {
-        method: "POST",
-      });
-      if (!res.ok) throw new Error(`Failed (${res.status})`);
-      setImportMsg({ ok: true, text: "Import started — games will appear shortly." });
-      router.refresh();
-    } catch (err) {
-      setImportMsg({ ok: false, text: err instanceof Error ? err.message : "Import failed." });
-    } finally {
-      setImporting(false);
-    }
-  }
 
   const acceptFile = (f: File | null) => { setFile(f); setUploadMsg(null); };
   const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); }, []);
@@ -52,6 +33,29 @@ export function ImportSection({ opponentId }: { opponentId: string }) {
     if (f) acceptFile(f);
   }, []);
 
+  async function onImportChesscom(e: React.FormEvent) {
+    e.preventDefault();
+    if (!chesscomUrl.trim()) return;
+    setChesscomImporting(true);
+    setChesscomMsg(null);
+    try {
+      const res = await fetch(`${API_BASE}/opponents/${opponentId}/imports/chesscom`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: chesscomUrl.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail ?? `Failed (${res.status})`);
+      }
+      setChesscomMsg({ ok: true, text: "Chess.com import started — games will appear shortly." });
+      setChesscomUrl("");
+      router.refresh();
+    } catch (err) {
+      setChesscomMsg({ ok: false, text: err instanceof Error ? err.message : "Import failed." });
+    } finally { setChesscomImporting(false); }
+  }
+
   async function onUpload(e: React.FormEvent) {
     e.preventDefault();
     if (!file) return;
@@ -60,10 +64,7 @@ export function ImportSection({ opponentId }: { opponentId: string }) {
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await fetch(`${API_BASE}/opponents/${opponentId}/imports/pgn`, {
-        method: "POST",
-        body: form,
-      });
+      const res = await fetch(`${API_BASE}/opponents/${opponentId}/imports/pgn`, { method: "POST", body: form });
       if (!res.ok) throw new Error(`Upload failed (${res.status})`);
       setUploadMsg({ ok: true, text: `"${file.name}" uploaded.` });
       setFile(null);
@@ -71,38 +72,59 @@ export function ImportSection({ opponentId }: { opponentId: string }) {
       router.refresh();
     } catch (err) {
       setUploadMsg({ ok: false, text: err instanceof Error ? err.message : "Upload failed." });
-    } finally {
-      setUploading(false);
-    }
+    } finally { setUploading(false); }
   }
 
   return (
     <div className="space-y-3">
-      {/* Action row */}
       <div className="flex flex-wrap items-center gap-2">
         <button
-          onClick={onImportGames}
-          disabled={importing}
-          className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {importing ? "Importing…" : "Import Games"}
-        </button>
-        <button
-          onClick={() => { setShowUpload((v) => !v); setFile(null); setUploadMsg(null); }}
-          className={`rounded-xl border px-4 py-2 text-sm hover:bg-gray-50 ${showUpload ? "bg-gray-50" : ""}`}
+          onClick={() => { setShowUpload((v) => !v); setShowChesscom(false); setFile(null); setUploadMsg(null); }}
+          className={`rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors ${showUpload ? "bg-gray-50" : "bg-white"}`}
         >
           Upload PGN
         </button>
-        {importMsg && (
-          <span className={`text-xs ${importMsg.ok ? "text-gray-400" : "text-red-500"}`}>
-            {importMsg.text}
-          </span>
-        )}
+        <button
+          onClick={() => { setShowChesscom((v) => !v); setShowUpload(false); setChesscomMsg(null); }}
+          className={`rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors ${showChesscom ? "bg-gray-50" : "bg-white"}`}
+        >
+          Chess.com
+        </button>
       </div>
 
-      {/* Inline PGN upload (toggled) */}
+      {showChesscom && (
+        <form onSubmit={onImportChesscom} className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+          <p className="text-xs text-gray-400">
+            Paste a Chess.com member URL or username — e.g.{" "}
+            <span className="font-mono text-gray-500">https://www.chess.com/member/hikaru</span>
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={chesscomUrl}
+              onChange={(e) => setChesscomUrl(e.target.value)}
+              placeholder="https://www.chess.com/member/hikaru or hikaru"
+              disabled={chesscomImporting}
+              className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm placeholder-gray-300 focus:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200 disabled:opacity-50"
+            />
+            <button
+              type="submit"
+              disabled={chesscomImporting || !chesscomUrl.trim()}
+              className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+            >
+              {chesscomImporting ? "Importing…" : "Import"}
+            </button>
+          </div>
+          {chesscomMsg && (
+            <span className={`text-xs ${chesscomMsg.ok ? "text-gray-400" : "text-rose-600"}`}>
+              {chesscomMsg.text}
+            </span>
+          )}
+        </form>
+      )}
+
       {showUpload && (
-        <form onSubmit={onUpload} className="rounded-2xl border p-4 space-y-3">
+        <form onSubmit={onUpload} className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
           <input
             ref={inputRef}
             type="file"
@@ -119,8 +141,8 @@ export function ImportSection({ opponentId }: { opponentId: string }) {
             onDragLeave={onDragLeave}
             onDrop={onDrop}
             className={[
-              "cursor-pointer select-none rounded-xl border-2 border-dashed px-6 py-6 text-center transition-colors",
-              isDragging ? "border-blue-400 bg-blue-50" : "border-gray-200 hover:border-gray-300 hover:bg-gray-50",
+              "cursor-pointer select-none rounded-lg border-2 border-dashed px-6 py-6 text-center transition-colors",
+              isDragging ? "border-gray-400 bg-gray-50" : "border-gray-200 hover:border-gray-300 hover:bg-gray-50",
               uploading ? "pointer-events-none opacity-50" : "",
             ].filter(Boolean).join(" ")}
           >
@@ -131,8 +153,8 @@ export function ImportSection({ opponentId }: { opponentId: string }) {
               </div>
             ) : (
               <span className="text-sm text-gray-400">
-                Drop a <span className="font-semibold text-gray-600">.pgn</span> file here or{" "}
-                <span className="font-semibold text-blue-600">browse</span>
+                Drop a <span className="font-medium text-gray-600">.pgn</span> file here or{" "}
+                <span className="font-medium text-gray-700 underline underline-offset-2">browse</span>
               </span>
             )}
           </div>
@@ -140,18 +162,19 @@ export function ImportSection({ opponentId }: { opponentId: string }) {
             <button
               type="submit"
               disabled={uploading || !file}
-              className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
             >
               {uploading ? "Uploading…" : "Upload"}
             </button>
             {file && !uploading && (
-              <button type="button" onClick={() => { setFile(null); if (inputRef.current) inputRef.current.value = ""; }}
-                className="text-sm text-gray-400 hover:text-gray-700">
+              <button type="button"
+                onClick={() => { setFile(null); if (inputRef.current) inputRef.current.value = ""; }}
+                className="text-sm text-gray-400 hover:text-gray-700 transition-colors">
                 Clear
               </button>
             )}
             {uploadMsg && (
-              <span className={`text-xs ${uploadMsg.ok ? "text-gray-400" : "text-red-500"}`}>
+              <span className={`text-xs ${uploadMsg.ok ? "text-gray-400" : "text-rose-600"}`}>
                 {uploadMsg.text}
               </span>
             )}

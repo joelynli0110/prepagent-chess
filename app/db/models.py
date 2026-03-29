@@ -103,6 +103,7 @@ class Game(Base):
     time_control: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     eco: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     opening_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    event: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     pgn_text: Mapped[str] = mapped_column(Text)
     total_plies: Mapped[int] = mapped_column(Integer, default=0)
 

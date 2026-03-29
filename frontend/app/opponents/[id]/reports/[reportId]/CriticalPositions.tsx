@@ -1,7 +1,6 @@
 "use client";
 
 import { Chess } from "chess.js";
-import { useState } from "react";
 import { Chessboard } from "react-chessboard";
 
 interface CriticalPosition {
@@ -33,6 +32,16 @@ function cplSeverity(cpl: number | null | undefined): string {
   return "text-orange-500";
 }
 
+function validateFen(fen: string | undefined): string {
+  if (!fen) return "start";
+  try {
+    new Chess(fen);
+    return fen;
+  } catch {
+    return "start";
+  }
+}
+
 function BoardCard({
   position,
   index,
@@ -42,32 +51,12 @@ function BoardCard({
   index: number;
   opponentId: string;
 }) {
-  const [flipped, setFlipped] = useState(false);
+  // Arrow for best move
+  const arrows = position.best_move_uci && position.best_move_uci.length >= 4
+    ? [{ startSquare: position.best_move_uci.slice(0, 2), endSquare: position.best_move_uci.slice(2, 4), color: "rgba(34, 197, 94, 0.85)" }]
+    : [];
 
-  // Determine board orientation: show from opponent's perspective
-  // ply is 1-indexed; odd ply = white moved, even = black moved
-  const sideToMove = position.ply % 2 === 1 ? "black" : "white"; // side that just played (blundered)
-  const boardOrientation = flipped
-    ? sideToMove === "white" ? "black" : "white"
-    : sideToMove;
-
-  // Highlight the best move squares if uci is available
-  const customSquareStyles: Record<string, React.CSSProperties> = {};
-  if (position.best_move_uci && position.best_move_uci.length >= 4) {
-    const from = position.best_move_uci.slice(0, 2);
-    const to = position.best_move_uci.slice(2, 4);
-    customSquareStyles[from] = { backgroundColor: "rgba(34, 197, 94, 0.35)" };
-    customSquareStyles[to]   = { backgroundColor: "rgba(34, 197, 94, 0.55)" };
-  }
-
-  // Validate FEN before passing to board
-  let validFen = position.fen_before;
-  try {
-    new Chess(position.fen_before);
-  } catch {
-    validFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-  }
-
+  const validFen = validateFen(position.fen_before);
   const moveNumber = Math.ceil(position.ply / 2);
 
   return (
@@ -75,20 +64,15 @@ function BoardCard({
       {/* Board */}
       <div className="relative">
         <Chessboard
-          position={validFen}
-          boardOrientation={boardOrientation}
-          customSquareStyles={customSquareStyles}
-          arePiecesDraggable={false}
-          boardWidth={280}
-          customBoardStyle={{ borderRadius: 0 }}
+          options={{
+            position: validFen,
+            boardOrientation: "white",
+            arrows,
+            allowDragging: false,
+            showNotation: false,
+            boardStyle: { borderRadius: 0 },
+          }}
         />
-        <button
-          onClick={() => setFlipped((f) => !f)}
-          title="Flip board"
-          className="absolute bottom-2 right-2 rounded-lg bg-white/80 border px-2 py-1 text-xs text-gray-600 hover:bg-white"
-        >
-          ⟳
-        </button>
       </div>
 
       {/* Info */}

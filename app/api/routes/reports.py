@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.db.models import OpponentSpace, Report
 from app.db.session import SessionLocal
 from app.dependencies import get_db
-from app.schemas.reports import ChatRequest, ReportRead, ReportRequest, ResumeRequest
+from app.schemas.reports import ChatRequest, ReportRead, ReportRequest, ResumeRequest, TranslateRequest
 from app.services.agent import prompts, retrieval as retrieval_svc
 from app.services.agent.graph import PrepState, _get_chat_llm, prep_graph
 
@@ -58,11 +58,12 @@ def _run_orchestrator(report_id: str, thread_id: str, initial_state: PrepState) 
 
 
 _AGENT_LABELS = {
-    "scouting":   "Scouting agent — analysing game distribution & time pressure…",
-    "pattern":    "Pattern agent — identifying structural tendencies & book deviations…",
-    "psychology": "Psychology agent — profiling comfort zones & fatigue patterns…",
-    "synthesis":  "Synthesis agent — writing preparation narrative…",
+    "synthesis": "Synthesis agent — writing preparation narrative…",
 }
+
+# Parallel agents: these run concurrently so we track done flags only,
+# not a single "current_agent" label.
+_PARALLEL_AGENTS = {"scouting", "pattern", "psychology"}
 
 
 def _write_progress(db: Session, report_id: str, node: str) -> None:
@@ -71,9 +72,11 @@ def _write_progress(db: Session, report_id: str, node: str) -> None:
     if not report:
         return
     existing = report.content or {}
-    existing["current_agent"] = node
-    existing["current_agent_label"] = _AGENT_LABELS.get(node, node)
     existing[f"{node}_done"] = True
+    # Only show a label for synthesis (sequential); parallel agents show via done flags
+    if node not in _PARALLEL_AGENTS:
+        existing["current_agent"] = node
+        existing["current_agent_label"] = _AGENT_LABELS.get(node, node)
     report.content = dict(existing)
     db.commit()
 
@@ -254,6 +257,89 @@ def get_report(
     if not report or report.opponent_space_id != opponent_id:
         raise HTTPException(status_code=404, detail="Report not found")
     return report
+
+
+# Google Translate language codes for our supported languages
+_GT_LANG_CODES: dict[str, str] = {
+    "en": "en",
+    "es": "es",
+    "fr": "fr",
+    "de": "de",
+    "it": "it",
+    "zh": "zh-CN",
+    "ja": "ja",
+}
+
+
+def _gt(text: str, target: str) -> str:
+    """Translate a non-empty string via Google Translate. Returns original on empty."""
+    if not text or not text.strip():
+        return text
+    from deep_translator import GoogleTranslator
+    return GoogleTranslator(source="auto", target=target).translate(text) or text
+
+
+def _gt_list(items: list, target: str) -> list:
+    """Translate a list of strings via Google Translate."""
+    if not items:
+        return items
+    from deep_translator import GoogleTranslator
+    translator = GoogleTranslator(source="auto", target=target)
+    return [translator.translate(item) or item for item in items if item]
+
+
+@router.post("/{report_id}/translate")
+def translate_report(
+    opponent_id: str,
+    report_id: str,
+    req: TranslateRequest,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Translate the report to the requested language using Google Translate."""
+    report = db.get(Report, report_id)
+    if not report or report.opponent_space_id != opponent_id:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if report.status != "ready":
+        raise HTTPException(status_code=409, detail="Report is not ready yet")
+
+    lang_code = _GT_LANG_CODES.get(req.target_language, req.target_language)
+
+    content = report.content or {}
+    narrative = content.get("narrative", "") or content.get("markdown", "") or ""
+    plan = content.get("plan") or {}
+    scouting = content.get("scouting_report") or {}
+    pattern = content.get("pattern_report") or {}
+    psychology = content.get("psychology_report") or {}
+
+    try:
+        return {
+            "narrative": _gt(narrative, lang_code),
+            "plan": {
+                "focus_areas": _gt_list(plan.get("focus_areas") or [], lang_code),
+                "phase_weakness": _gt(plan.get("phase_weakness") or "", lang_code),
+                "prep_priority": _gt(plan.get("prep_priority") or "", lang_code),
+                "risk_notes": _gt(plan.get("risk_notes") or "", lang_code),
+            },
+            "scouting": {
+                "time_pressure_insight": _gt(scouting.get("time_pressure_insight") or "", lang_code),
+                "rating_insight": _gt(scouting.get("rating_insight") or "", lang_code),
+                "key_findings": _gt_list(scouting.get("key_findings") or [], lang_code),
+            },
+            "pattern": {
+                "structural_tendencies": _gt_list(pattern.get("structural_tendencies") or [], lang_code),
+                "recurring_error_patterns": _gt_list(pattern.get("recurring_error_patterns") or [], lang_code),
+                "exploit_positions": _gt_list(pattern.get("exploit_positions") or [], lang_code),
+            },
+            "psychology": {
+                "psychological_profile": _gt(psychology.get("psychological_profile") or "", lang_code),
+                "exploit_strategy": _gt(psychology.get("exploit_strategy") or "", lang_code),
+                "color_insight": _gt(psychology.get("color_insight") or "", lang_code),
+                "fatigue_insight": _gt(psychology.get("fatigue_insight") or "", lang_code),
+            },
+        }
+    except Exception as exc:
+        logger.exception("Translation failed for report %s", report_id)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.post("/{report_id}/chat")

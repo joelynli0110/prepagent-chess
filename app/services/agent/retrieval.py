@@ -374,6 +374,10 @@ def get_pattern_data(db: Session, space_id: str) -> dict:
         .where(Game.opponent_space_id == space_id)
         .where(EngineAnalysis.classification == "blunder")
         .where(MoveFact.side_to_move == Game.opponent_side)
+        .where(
+            (EngineAnalysis.best_move_san == None)
+            | (EngineAnalysis.best_move_san != MoveFact.san)
+        )
         .order_by(EngineAnalysis.centipawn_loss.desc())
         .limit(6)
     ).all()

@@ -22,6 +22,8 @@ class GameRead(BaseModel):
     time_control: Optional[str]
     eco: Optional[str]
     opening_name: Optional[str]
+    event: Optional[str]
+    opponent_side: Optional[Side]
     total_plies: int
 
 
