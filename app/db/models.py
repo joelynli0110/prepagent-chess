@@ -31,6 +31,7 @@ class Platform(str, Enum):
 
 
 class JobType(str, Enum):
+    fetch_profile = "fetch_profile"
     import_pgn = "import_pgn"
     analyze_games = "analyze_games"
     generate_report = "generate_report"

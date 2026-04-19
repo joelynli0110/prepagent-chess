@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -10,7 +10,11 @@ router = APIRouter(prefix="/opponents", tags=["opponents"])
 
 
 @router.post("", response_model=OpponentSpaceRead)
-def create_opponent_space(payload: OpponentSpaceCreate, db: Session = Depends(get_db)) -> OpponentSpace:
+def create_opponent_space(
+    payload: OpponentSpaceCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> OpponentSpace:
     opponent = OpponentSpace(
         display_name=payload.display_name,
         canonical_name=payload.canonical_name,
@@ -19,6 +23,19 @@ def create_opponent_space(payload: OpponentSpaceCreate, db: Session = Depends(ge
     db.add(opponent)
     db.commit()
     db.refresh(opponent)
+
+    from app.api.routes.imports import create_onboarding_jobs, run_onboarding_pipeline
+    profile_id, cb_id, cc_id = create_onboarding_jobs(
+        db, opponent.id, opponent.display_name, canonical_name=opponent.canonical_name
+    )
+    db.commit()
+
+    background_tasks.add_task(
+        run_onboarding_pipeline,
+        opponent.id, opponent.display_name,
+        profile_id, cb_id, cc_id,
+    )
+
     return opponent
 
 

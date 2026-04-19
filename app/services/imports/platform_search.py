@@ -161,10 +161,13 @@ def search_fide_players(query: str, max_results: int = 15) -> list[dict]:
         with urllib.request.urlopen(req, timeout=8) as resp:
             html = resp.read().decode("utf-8")
     except Exception as exc:
-        logger.debug("FIDE player search failed: %s", exc)
-        return []
+        logger.warning("FIDE player search failed for %r: %s", query, exc)
+        raise
 
+    logger.debug("FIDE search %r: got %d chars of HTML", query, len(html))
     players = _parse_fide_search_html(html)
+    if not players:
+        logger.warning("FIDE search %r: HTML received but 0 players parsed. First 500 chars: %s", query, html[:500])
     players.sort(key=lambda p: p.get("rating_std") or 0, reverse=True)
     return players[:max_results]
 
@@ -349,72 +352,131 @@ def _profile_from_username(username: str) -> Optional[dict]:
     return data
 
 
+def _build_chesscom_result(profile: dict, title: str) -> dict:
+    real_name = (profile.get("name") or "").strip()
+    country_url = profile.get("country") or ""
+    country = country_url.split("/")[-1] if country_url else None
+    uname = profile.get("username", "")
+    return {
+        "platform": "chesscom",
+        "username": uname,
+        "real_name": real_name or None,
+        "title": title,
+        "country": country or None,
+        "avatar": profile.get("avatar") or None,
+        "url": profile.get("url") or f"https://www.chess.com/member/{uname}",
+        "verified": bool(profile.get("verified")),
+    }
+
+
+def _real_name_matches(real_name: str, query_tokens: set[str]) -> bool:
+    """
+    Strict real-name match: ALL significant query tokens (length >= 3) must
+    appear in the profile name. Single-letter initials in the query are ignored.
+    Returns False for empty names or when no significant tokens are present.
+    """
+    if not real_name:
+        return False
+    profile_tokens = _name_tokens(real_name)
+    significant = {t for t in query_tokens if len(t) >= 3}
+    if not significant:
+        return False  # nothing meaningful to match on
+    return significant.issubset(profile_tokens)
+
+
+def _is_verified(profile: dict) -> bool:
+    return bool(profile.get("verified"))
+
+
+def _scan_profiles_by_real_name(
+    usernames: list[str],
+    query_tokens: set[str],
+    title: str,
+    max_workers: int = 12,
+) -> Optional[dict]:
+    """
+    Fetch profiles for every username concurrently and return the best match
+    whose real name strictly matches all significant query tokens.
+    Verified accounts are preferred over unverified ones.
+    """
+    import concurrent.futures
+    import threading
+
+    verified_match: Optional[dict] = None
+    unverified_match: Optional[dict] = None
+    lock = threading.Lock()
+    stop = threading.Event()
+
+    def check(username: str) -> None:
+        nonlocal verified_match, unverified_match
+        if stop.is_set():
+            return
+        profile = _profile_from_username(username)
+        if not profile or stop.is_set():
+            return
+        real_name = (profile.get("name") or "").strip()
+        if _real_name_matches(real_name, query_tokens):
+            result = _build_chesscom_result(profile, title)
+            with lock:
+                if _is_verified(profile):
+                    if not verified_match:
+                        verified_match = result
+                        stop.set()
+                elif not unverified_match:
+                    unverified_match = result
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futures = [ex.submit(check, u) for u in usernames]
+        concurrent.futures.wait(futures)
+
+    return verified_match or unverified_match
+
+
 def search_chesscom(display_name: str, title_hint: Optional[str] = None) -> list[dict]:
     """
-    Search Chess.com for a titled player matching *display_name*.
+    Search Chess.com for a titled player matching *display_name* by real name.
 
-    Strategy (agentic):
-      1. Determine which title lists to check (use FIDE title hint when available,
-         otherwise try all common titles in order).
-      2. Fetch the full titled-player list for each title via
-         GET /pub/titled/{TITLE} — this returns every Chess.com username that
-         holds that title, typically a few hundred to ~3 000 entries.
-      3. Shortlist usernames whose text overlaps with the display name
-         (e.g. 'hikaru' appears in 'Hikaru Nakamura' tokens).
-      4. For each shortlisted username, fetch the profile and check the `name`
-         field for a match. Return on first confirmed hit.
+    Strategy:
+      1. Direct lookup — try common username patterns derived from the name
+         (fast path, covers most titled players who use their name as username).
+      2. Full real-name scan — fetch ALL profiles for the relevant title and
+         match against the `name` field returned by Chess.com. Username is
+         never used for matching in this phase.
     """
     query_tokens = _name_tokens(display_name)
     if not query_tokens:
         return []
 
-    # Which title lists to search
-    if title_hint:
-        titles_to_try = [title_hint.upper()]
-        # Add the remaining titles as fallback
-        titles_to_try += [t for t in _CHESSCOM_TITLES if t != title_hint.upper()]
-    else:
-        titles_to_try = _CHESSCOM_TITLES
+    # ---- Phase 1: direct username candidates (fast path) --------------------
+    for username in _candidate_usernames(display_name):
+        profile = _profile_from_username(username)
+        if not profile:
+            continue
+        title = (profile.get("title") or "").upper()
+        if not title:
+            continue
+        real_name = (profile.get("name") or "").strip()
+        if _real_name_matches(real_name, query_tokens):
+            logger.debug("Chess.com direct hit for %r → %s (verified=%s)", display_name, username, _is_verified(profile))
+            return [_build_chesscom_result(profile, title)]
+
+    # ---- Phase 2: full real-name scan across all titled players -------------
+    titles_to_try: list[str] = (
+        [title_hint.upper()] + [t for t in _CHESSCOM_TITLES if t != title_hint.upper()]
+        if title_hint else _CHESSCOM_TITLES
+    )
 
     for title in titles_to_try:
         usernames = _fetch_titled_usernames(title)
         if not usernames:
             continue
-
-        # Shortlist: keep usernames that share at least one token with the name
-        candidates = [
-            u for u in usernames
-            if _name_tokens(u) & query_tokens
-        ]
         logger.debug(
-            "Chess.com titled/%s: %d total, %d candidates for %r",
-            title, len(usernames), len(candidates), display_name,
+            "Chess.com titled/%s: scanning %d profiles by real name for %r",
+            title, len(usernames), display_name,
         )
-
-        for username in candidates:
-            profile = _profile_from_username(username)
-            time.sleep(0.2)
-            if not profile:
-                continue
-
-            uname = profile.get("username", "")
-            real_name = (profile.get("name") or "").strip()
-
-            # Accept if the real name on the profile shares tokens with our query,
-            # or if there's only one candidate (username already matched).
-            profile_tokens = _name_tokens(real_name) if real_name else set()
-            if len(candidates) == 1 or (profile_tokens & query_tokens):
-                country_url = profile.get("country") or ""
-                country = country_url.split("/")[-1] if country_url else None
-                return [{
-                    "platform": "chesscom",
-                    "username": uname,
-                    "real_name": real_name or None,
-                    "title": title,
-                    "country": country or None,
-                    "avatar": profile.get("avatar") or None,
-                    "url": profile.get("url") or f"https://www.chess.com/member/{uname}",
-                }]
+        result = _scan_profiles_by_real_name(usernames, query_tokens, title)
+        if result:
+            return [result]
 
     return []
 

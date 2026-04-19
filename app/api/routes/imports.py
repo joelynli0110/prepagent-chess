@@ -157,12 +157,31 @@ def import_chesscom(
     return job
 
 
-def _derive_chessbase_slug(display_name: str) -> str | None:
-    """'Magnus Carlsen' → 'Carlsen_Magnus' (ChessBase slug format)."""
-    parts = display_name.replace(",", " ").split()
-    parts = [p.strip() for p in parts if p.strip()]
-    if len(parts) >= 2:
-        return f"{parts[-1].title()}_{parts[0].title()}"
+def _derive_chessbase_slug(name: str) -> str | None:
+    """
+    Derive a ChessBase slug from a player name.
+
+    Handles two formats:
+      - FIDE canonical  'Praggnanandhaa, Rameshbabu' → 'Praggnanandhaa_Rameshbabu'
+      - Display name    'Magnus Carlsen'             → 'Carlsen_Magnus'
+
+    Single-letter initials (e.g. 'R' in 'Praggnanandhaa R') are ignored so
+    they are never mistaken for the last name.
+    """
+    name = name.strip()
+    if "," in name:
+        # FIDE canonical: already "Last, First"
+        last, first = name.split(",", 1)
+        last, first = last.strip().title(), first.strip().title()
+        if last and first:
+            return f"{last}_{first}"
+        return None
+
+    # Display name: filter out initials (single letters / letters with period)
+    parts = [p.strip() for p in name.split() if p.strip()]
+    full = [p for p in parts if len(p.rstrip(".")) > 1]
+    if len(full) >= 2:
+        return f"{full[-1].title()}_{full[0].title()}"
     return None
 
 
@@ -313,6 +332,152 @@ def _bg_store_player_profile(opponent_id: str, display_name: str) -> None:
             return
         opponent.profile_data = profile
         db.commit()
+    finally:
+        db.close()
+
+
+def create_onboarding_jobs(db: Session, opponent_id: str, display_name: str, canonical_name: str | None = None) -> tuple[str, str | None, str]:
+    """
+    Create the three onboarding jobs synchronously so they exist before the
+    background pipeline runs. Returns (profile_job_id, cb_job_id_or_None, cc_job_id).
+    canonical_name should be in FIDE 'Last, First' format when available.
+    """
+    profile_job = Job(
+        opponent_space_id=opponent_id,
+        job_type=JobType.fetch_profile,
+        status=JobStatus.queued,
+        payload={"display_name": display_name},
+    )
+    db.add(profile_job)
+
+    # Prefer canonical_name for slug derivation — it's in "Last, First" FIDE
+    # format which directly maps to ChessBase's "Last_First" slug convention.
+    slug = _derive_chessbase_slug(canonical_name or display_name)
+    cb_job: Job | None = None
+    if slug:
+        cb_job = Job(
+            opponent_space_id=opponent_id,
+            job_type=JobType.import_pgn,
+            status=JobStatus.queued,
+            payload={"source": "chessbase", "slug": slug},
+        )
+        db.add(cb_job)
+
+    cc_job = Job(
+        opponent_space_id=opponent_id,
+        job_type=JobType.import_pgn,
+        status=JobStatus.queued,
+        payload={"source": "chesscom", "username": None},
+    )
+    db.add(cc_job)
+    db.flush()
+    return profile_job.id, (cb_job.id if cb_job else None), cc_job.id
+
+
+def run_onboarding_pipeline(
+    opponent_id: str,
+    display_name: str,
+    profile_job_id: str,
+    cb_job_id: str | None,
+    cc_job_id: str,
+) -> None:
+    """
+    Sequential onboarding pipeline. Jobs are already created (queued); this
+    function runs each step and updates the pre-created job records.
+      1. Fetch FIDE profile → store on opponent, extract title for Chess.com search
+      2. Fetch ChessBase games
+      3. Fetch Chess.com games (uses title from step 1 to narrow the search)
+    """
+    from app.db.session import SessionLocal
+    from app.services.imports.platform_search import search_chesscom
+
+    db = SessionLocal()
+    try:
+        # ------------------------------------------------------------------
+        # Step 1 — FIDE profile
+        # ------------------------------------------------------------------
+        profile_job = db.get(Job, profile_job_id)
+        if profile_job:
+            profile_job.status = JobStatus.running
+            db.commit()
+
+        title_hint: str | None = None
+        try:
+            profile = build_player_profile(display_name)
+            opponent = db.get(OpponentSpace, opponent_id)
+            if opponent and profile:
+                opponent.profile_data = profile
+                title_hint = (profile.get("title") or "").upper() or None
+            if profile_job:
+                profile_job.status = JobStatus.completed
+                profile_job.result = {"found": bool(profile)}
+                db.commit()
+        except Exception as exc:
+            if profile_job:
+                profile_job.status = JobStatus.failed
+                profile_job.result = {"error": str(exc)}
+                db.commit()
+
+        # ------------------------------------------------------------------
+        # Step 2 — ChessBase
+        # ------------------------------------------------------------------
+        if cb_job_id:
+            cb_job = db.get(Job, cb_job_id)
+            if cb_job:
+                cb_job.status = JobStatus.running
+                db.commit()
+                try:
+                    slug = (cb_job.payload or {}).get("slug", "")
+                    _, pgn_text = fetch_pgn(slug)
+                    process_pgn_import_job(db, cb_job, opponent_id, pgn_text, source="chessbase")
+                    # Persist ChessBase profile URL
+                    opponent = db.get(OpponentSpace, opponent_id)
+                    if opponent:
+                        pd = dict(opponent.profile_data or {})
+                        pd["chessbase_url"] = f"https://players.chessbase.com/en/player/{slug}"
+                        opponent.profile_data = pd
+                        db.commit()
+                except Exception as exc:
+                    cb_job.status = JobStatus.failed
+                    cb_job.result = {"error": str(exc)}
+                    db.commit()
+
+        # ------------------------------------------------------------------
+        # Step 3 — Chess.com (uses title from step 1)
+        # ------------------------------------------------------------------
+        cc_job = db.get(Job, cc_job_id)
+        if cc_job:
+            cc_job.status = JobStatus.running
+            db.commit()
+            try:
+                accounts = search_chesscom(display_name, title_hint=title_hint)
+                if not accounts:
+                    cc_job.status = JobStatus.failed
+                    cc_job.result = {"error": f"No Chess.com account found for {display_name!r}"}
+                    db.commit()
+                else:
+                    username = accounts[0]["username"]
+                    cc_job.payload = {"source": "chesscom", "username": username}
+                    db.commit()
+                    pgn_text = chesscom_fetch_pgn(username, max_games=500)
+                    if not pgn_text.strip():
+                        cc_job.status = JobStatus.failed
+                        cc_job.result = {"error": f"No games found for Chess.com user {username!r}"}
+                        db.commit()
+                    else:
+                        process_pgn_import_job(db, cc_job, opponent_id, pgn_text, source="chesscom")
+                    # Persist Chess.com profile URL
+                    opponent = db.get(OpponentSpace, opponent_id)
+                    if opponent:
+                        pd = dict(opponent.profile_data or {})
+                        pd["chesscom_url"] = accounts[0].get("url") or f"https://www.chess.com/member/{username}"
+                        opponent.profile_data = pd
+                        db.commit()
+            except Exception as exc:
+                cc_job.status = JobStatus.failed
+                cc_job.result = {"error": str(exc)}
+                db.commit()
+
     finally:
         db.close()
 

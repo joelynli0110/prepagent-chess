@@ -4,18 +4,13 @@ import type { PlayerProfile } from "@/lib/types";
 
 function FlagImg({ iso2 }: { iso2: string | null | undefined }) {
   if (!iso2) return null;
-  return (
-    <img
-      src={`https://flagcdn.com/20x15/${iso2.toLowerCase()}.png`}
-      width={20} height={15} alt={iso2}
-    />
-  );
+
+  return <img src={`https://flagcdn.com/20x15/${iso2.toLowerCase()}.png`} width={20} height={15} alt={iso2} />;
 }
 
 export function PlayerProfileCard({
   profile,
 }: {
-  opponentId: string;
   profile: PlayerProfile | null | undefined;
 }) {
   if (!profile) {
@@ -37,7 +32,7 @@ export function PlayerProfileCard({
         />
       ) : (
         <div className="flex h-20 w-16 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-2xl text-gray-300">
-          ♟
+          ?
         </div>
       )}
 
@@ -58,30 +53,26 @@ export function PlayerProfileCard({
               {profile.nationality ?? profile.federation}
             </span>
           )}
-          {profile.birth_year && (
-            <span className="text-gray-400">b. {profile.birth_year}</span>
-          )}
-          {profile.gender && (
-            <span className="text-gray-400">{profile.gender}</span>
-          )}
+          {profile.birth_year && <span className="text-gray-400">b. {profile.birth_year}</span>}
+          {profile.gender && <span className="text-gray-400">{profile.gender}</span>}
 
           {(profile.rating_std != null || profile.rating_rapid != null || profile.rating_blitz != null) && (
             <span className="flex items-center gap-3">
               {profile.rating_std != null && (
                 <span>
-                  <span className="text-gray-400 text-xs">Classical </span>
+                  <span className="text-xs text-gray-400">Classical </span>
                   <span className="font-semibold text-gray-900">{profile.rating_std}</span>
                 </span>
               )}
               {profile.rating_rapid != null && (
                 <span>
-                  <span className="text-gray-400 text-xs">Rapid </span>
+                  <span className="text-xs text-gray-400">Rapid </span>
                   <span className="font-medium text-gray-700">{profile.rating_rapid}</span>
                 </span>
               )}
               {profile.rating_blitz != null && (
                 <span>
-                  <span className="text-gray-400 text-xs">Blitz </span>
+                  <span className="text-xs text-gray-400">Blitz </span>
                   <span className="font-medium text-gray-700">{profile.rating_blitz}</span>
                 </span>
               )}
@@ -89,16 +80,28 @@ export function PlayerProfileCard({
           )}
         </div>
 
-        {profile.fide_url && (
-          <a
-            href={profile.fide_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-gray-400 hover:text-gray-700 hover:underline transition-colors"
-          >
-            FIDE profile ↗
-          </a>
-        )}
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          {profile.fide_url && (
+            <a
+              href={profile.fide_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-gray-400 transition-colors hover:text-gray-700 hover:underline"
+            >
+              FIDE profile {"->"}
+            </a>
+          )}
+          {profile.chessbase_url && (
+            <a
+              href={profile.chessbase_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-gray-400 transition-colors hover:text-gray-700 hover:underline"
+            >
+              ChessBase {"->"}
+            </a>
+          )}
+        </div>
       </div>
     </div>
   );
