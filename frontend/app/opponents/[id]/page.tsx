@@ -33,17 +33,20 @@ export default async function OpponentDetailPage({
     <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
       <OpponentAutoRefresh opponentId={id} shouldStart={shouldAutoRefresh} />
 
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 rounded-[28px] border border-stone-200/80 bg-[var(--surface)] px-5 py-4 shadow-[var(--shadow)]">
         <div className="flex items-center gap-3">
           <Link
             href="/opponents"
             title="Back"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-stone-200 bg-[var(--surface-strong)] text-[var(--foreground-soft)] transition-colors hover:bg-white hover:text-[var(--foreground)]"
           >
             <ArrowLeftIcon className="h-4 w-4" />
             <span className="sr-only">Back</span>
           </Link>
-          <h1 className="text-2xl font-semibold text-gray-900">{opponent.display_name}</h1>
+          <div className="space-y-0.5">
+            <div className="text-[11px] font-medium uppercase tracking-[0.24em] text-[var(--foreground-muted)]">Opponent</div>
+            <h1 className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">{opponent.display_name}</h1>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <div id="import-section">
@@ -55,7 +58,7 @@ export default async function OpponentDetailPage({
 
       {message && (
         <div
-          className={`rounded-xl border p-4 text-sm ${
+          className={`rounded-2xl border p-4 text-sm shadow-[var(--shadow)] ${
             status === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800"
           }`}
         >

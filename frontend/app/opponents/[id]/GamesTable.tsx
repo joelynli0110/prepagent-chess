@@ -75,10 +75,19 @@ function getValue(game: Game, key: SortKey): string {
   }
 }
 
+function lineVariation(game: Game): string {
+  const opening = game.opening_name ?? "";
+  const colon = opening.indexOf(":");
+  if (colon < 0) return "-";
+  const variation = opening.slice(colon + 1).trim();
+  return variation || "-";
+}
+
 export function GamesTable({
   games,
   opponentId,
   filterEco,
+  filterName,
   filterColor,
   filterLabel,
   onClearFilter,
@@ -86,6 +95,7 @@ export function GamesTable({
   games: Game[];
   opponentId: string;
   filterEco?: string | null;
+  filterName?: string | null;
   filterColor?: string | null;
   filterLabel?: string | null;
   onClearFilter?: () => void;
@@ -105,7 +115,14 @@ export function GamesTable({
     setPage(0);
   }
 
-  const filtered = filterEco ? games.filter((g) => g.eco === filterEco && (!filterColor || g.opponent_side === filterColor)) : games;
+  const filtered = filterEco
+    ? games.filter(
+        (g) =>
+          g.eco === filterEco &&
+          (!filterName || (g.opening_name ?? null) === filterName) &&
+          (!filterColor || g.opponent_side === filterColor)
+      )
+    : games;
 
   const sorted = [...filtered].sort((a, b) => {
     const cmp = getValue(a, sortKey).localeCompare(getValue(b, sortKey), undefined, { numeric: true });
@@ -195,6 +212,7 @@ export function GamesTable({
               <SortHeader col="black_name" label="Black" current={sortKey} dir={sortDir} onSort={handleSort} />
               <SortHeader col="result" label="Result" current={sortKey} dir={sortDir} onSort={handleSort} />
               <SortHeader col="eco" label="ECO" current={sortKey} dir={sortDir} onSort={handleSort} />
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-400">Line</th>
               <SortHeader col="event" label="Event" current={sortKey} dir={sortDir} onSort={handleSort} />
               <SortHeader col="source" label="Src" current={sortKey} dir={sortDir} onSort={handleSort} />
               <SortHeader col="date_played" label="Date" current={sortKey} dir={sortDir} onSort={handleSort} />
@@ -203,7 +221,7 @@ export function GamesTable({
           <tbody className="divide-y divide-gray-50">
             {pageGames.length === 0 ? (
               <tr>
-                <td className="px-4 py-6 text-sm text-gray-400" colSpan={7}>
+                <td className="px-4 py-6 text-sm text-gray-400" colSpan={8}>
                   {filterEco ? "No games found." : "No games yet."}
                 </td>
               </tr>
@@ -221,6 +239,9 @@ export function GamesTable({
                   </td>
                   <td className="px-4 py-3">
                     <span className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-500">{game.eco ?? "-"}</span>
+                  </td>
+                  <td className="max-w-[240px] truncate px-4 py-3 text-xs text-gray-500" title={lineVariation(game)}>
+                    {lineVariation(game)}
                   </td>
                   <td className="max-w-[180px] truncate px-4 py-3 text-xs text-gray-500">{game.event ?? "-"}</td>
                   <td className="px-4 py-3">

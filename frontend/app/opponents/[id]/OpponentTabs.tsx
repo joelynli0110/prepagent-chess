@@ -21,12 +21,12 @@ export function OpponentTabs({
 
   return (
     <section className="space-y-4">
-      <div className="inline-flex rounded-full border border-gray-200 bg-white p-1 shadow-sm">
+      <div className="inline-flex rounded-full border border-stone-200 bg-[var(--surface)] p-1 shadow-[var(--shadow)]">
         <button
           type="button"
           onClick={() => setActiveTab("games")}
           className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm transition-colors ${
-            activeTab === "games" ? "bg-gray-900 text-white" : "text-gray-500 hover:text-gray-700"
+            activeTab === "games" ? "bg-[var(--accent)] text-white" : "text-[var(--foreground-soft)] hover:text-[var(--foreground)]"
           }`}
         >
           <FileTextIcon className="h-4 w-4" />
@@ -36,7 +36,7 @@ export function OpponentTabs({
           type="button"
           onClick={() => setActiveTab("reports")}
           className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm transition-colors ${
-            activeTab === "reports" ? "bg-gray-900 text-white" : "text-gray-500 hover:text-gray-700"
+            activeTab === "reports" ? "bg-[var(--accent)] text-white" : "text-[var(--foreground-soft)] hover:text-[var(--foreground)]"
           }`}
         >
           <SparkIcon className="h-4 w-4" />

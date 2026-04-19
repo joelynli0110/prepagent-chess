@@ -18,32 +18,33 @@ export function PlayerProfileCard({
   openingsCount: number;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+    <div className="rounded-[28px] border border-stone-200/80 bg-[var(--surface)] p-6 shadow-[var(--shadow)]">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="flex items-start gap-4">
           {profile?.photo_url ? (
             <img
               src={profile.photo_url}
               alt={profile.name ?? "Player photo"}
-              className="h-16 w-14 shrink-0 rounded-xl object-cover"
+              className="h-20 w-16 shrink-0 rounded-2xl border border-stone-200/80 object-cover shadow-sm"
             />
           ) : (
-            <div className="flex h-16 w-14 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-lg text-gray-300">
+            <div className="flex h-20 w-16 shrink-0 items-center justify-center rounded-2xl border border-stone-200 bg-[var(--surface-strong)] text-lg text-[var(--foreground-muted)]">
               ?
             </div>
           )}
 
-          <div className="min-w-0 space-y-2">
+          <div className="min-w-0 space-y-3">
+            <div className="text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--foreground-muted)]">Profile</div>
             <div className="flex flex-wrap items-center gap-2">
               {profile?.title && (
-                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-gray-600">
+                <span className="rounded-full border border-[var(--accent-soft)] bg-[var(--accent-soft)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--accent)]">
                   {profile.title}
                 </span>
               )}
-              <h2 className="text-lg font-semibold text-gray-900">{profile?.name ?? "Player"}</h2>
+              <h2 className="text-xl font-semibold tracking-tight text-[var(--foreground)]">{profile?.name ?? "Player"}</h2>
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[var(--foreground-soft)]">
               {(profile?.federation_iso2 || profile?.nationality || profile?.federation) && (
                 <span className="flex items-center gap-1.5">
                   <FlagImg iso2={profile?.federation_iso2 ?? null} />
@@ -63,7 +64,7 @@ export function PlayerProfileCard({
                     href={profile.fide_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2.5 py-1 text-xs text-gray-500 transition-colors hover:border-gray-300 hover:text-gray-700"
+                    className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-[var(--surface-strong)] px-2.5 py-1 text-xs text-[var(--foreground-soft)] transition-colors hover:border-stone-300 hover:bg-white hover:text-[var(--foreground)]"
                   >
                     FIDE
                     <ExternalLinkIcon className="h-3.5 w-3.5" />
@@ -74,7 +75,7 @@ export function PlayerProfileCard({
                     href={profile.chessbase_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2.5 py-1 text-xs text-gray-500 transition-colors hover:border-gray-300 hover:text-gray-700"
+                    className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-[var(--surface-strong)] px-2.5 py-1 text-xs text-[var(--foreground-soft)] transition-colors hover:border-stone-300 hover:bg-white hover:text-[var(--foreground)]"
                   >
                     ChessBase
                     <ExternalLinkIcon className="h-3.5 w-3.5" />
@@ -85,14 +86,14 @@ export function PlayerProfileCard({
           </div>
         </div>
 
-        <div className="grid flex-1 grid-cols-2 gap-2 lg:max-w-xs">
-          <div className="rounded-xl bg-gray-50 px-4 py-3">
-            <div className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Games</div>
-            <div className="mt-1 text-2xl font-semibold text-gray-900">{gamesCount}</div>
+        <div className="grid flex-1 grid-cols-2 gap-3 lg:max-w-xs">
+          <div className="rounded-2xl border border-stone-200 bg-[var(--surface-strong)] px-4 py-4">
+            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--foreground-muted)]">Games</div>
+            <div className="mt-1 text-2xl font-semibold tracking-tight text-[var(--foreground)]">{gamesCount}</div>
           </div>
-          <div className="rounded-xl bg-gray-50 px-4 py-3">
-            <div className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Openings</div>
-            <div className="mt-1 text-2xl font-semibold text-gray-900">{openingsCount}</div>
+          <div className="rounded-2xl border border-stone-200 bg-[var(--surface-strong)] px-4 py-4">
+            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--foreground-muted)]">Openings</div>
+            <div className="mt-1 text-2xl font-semibold tracking-tight text-[var(--foreground)]">{openingsCount}</div>
           </div>
         </div>
       </div>

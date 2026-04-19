@@ -431,12 +431,12 @@ export function GameReplay({
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 px-6 py-8">
-      <div className="flex items-center justify-between gap-4">
-        <div className="space-y-1">
-          <Link href={`/opponents/${opponentId}`} className="text-sm text-gray-400 transition-colors hover:text-gray-700">
+      <div className="flex items-center justify-between gap-4 rounded-[30px] border border-stone-200/80 bg-[var(--surface)] px-5 py-4 shadow-[var(--shadow)]">
+        <div className="space-y-1.5">
+          <Link href={`/opponents/${opponentId}`} className="text-sm text-[var(--foreground-muted)] transition-colors hover:text-[var(--foreground-soft)]">
             ← Opponent
           </Link>
-          <h1 className="text-2xl font-semibold text-gray-900">
+          <h1 className="text-[2rem] font-semibold tracking-tight text-[var(--foreground)]">
             {game.white_name} vs {game.black_name}
           </h1>
           <div className="text-sm text-gray-500">
@@ -444,16 +444,16 @@ export function GameReplay({
             {game.date_played ? ` · ${game.date_played}` : ""}
           </div>
         </div>
-        <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
-          {analysisStatus === "running" && <div className="text-sm text-gray-400">Analyzing...</div>}
+        <div className="flex items-center gap-2 rounded-2xl border border-stone-200 bg-[var(--surface-strong)] px-4 py-3 shadow-[var(--shadow)]">
+          {analysisStatus === "running" && <div className="text-sm text-[var(--foreground-muted)]">Analyzing...</div>}
           {analysisStatus === "failed" && <div className="text-sm text-rose-600">Analysis failed</div>}
-          <div className="text-sm text-gray-500">Result</div>
-          <div className="font-semibold text-gray-900">{resultLabel(game.result)}</div>
+          <div className="text-sm text-[var(--foreground-soft)]">Result</div>
+          <div className="font-semibold text-[var(--foreground)]">{resultLabel(game.result)}</div>
           <button
             type="button"
             onClick={() => void analyzeNow()}
             disabled={analysisStatus === "running"}
-            className="ml-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+            className="ml-2 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-[var(--foreground-soft)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {analysisRows.length > 0 ? "Re-analyze" : analysisStatus === "running" ? "Analyzing..." : "Analyze"}
           </button>

@@ -1,9 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Game, OpeningStat } from "@/lib/types";
 import { GamesTable } from "./GamesTable";
 import { FileTextIcon } from "./Icons";
+
+type OpeningSortKey = "games_count" | "win_pct";
+type SortDir = "asc" | "desc";
+
+function openingScorePct(row: OpeningStat): number {
+  if (!row.games_count) return -1;
+  return (row.wins + row.draws * 0.5) / row.games_count;
+}
 
 function OpeningName({ name }: { name: string | null | undefined }) {
   const full = name ?? "";
@@ -22,14 +30,46 @@ function OpeningName({ name }: { name: string | null | undefined }) {
 function OpeningsTable({
   rows,
   filterEco,
+  filterName,
   filterColor,
   onSelect,
 }: {
   rows: OpeningStat[];
   filterEco: string | null;
+  filterName: string | null;
   filterColor: string | null;
   onSelect: (eco: string | null | undefined, name: string | null | undefined, color: string) => void;
 }) {
+  const [sortKey, setSortKey] = useState<OpeningSortKey>("win_pct");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  function handleSort(nextKey: OpeningSortKey) {
+    if (sortKey === nextKey) {
+      setSortDir((current) => (current === "desc" ? "asc" : "desc"));
+      return;
+    }
+    setSortKey(nextKey);
+    setSortDir("desc");
+  }
+
+  const sortedRows = useMemo(() => {
+    return [...rows].sort((a, b) => {
+      const aWinPct = openingScorePct(a);
+      const bWinPct = openingScorePct(b);
+
+      const primary =
+        sortKey === "games_count"
+          ? a.games_count - b.games_count
+          : aWinPct - bWinPct;
+
+      if (primary !== 0) {
+        return sortDir === "desc" ? -primary : primary;
+      }
+
+      return b.games_count - a.games_count;
+    });
+  }, [rows, sortDir, sortKey]);
+
   if (rows.length === 0) {
     return <div className="rounded-2xl border border-gray-200 bg-white px-4 py-5 text-sm text-gray-400 shadow-sm">No opening data yet.</div>;
   }
@@ -40,14 +80,30 @@ function OpeningsTable({
         <thead>
           <tr className="border-b border-gray-100">
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-400">Opening</th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-400">G</th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-400">Win%</th>
+            <th
+              className="cursor-pointer px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-400 transition-colors hover:text-gray-600"
+              onClick={() => handleSort("games_count")}
+            >
+              G
+              <span className="ml-1 inline-block w-3 text-center">
+                {sortKey === "games_count" ? (sortDir === "desc" ? "▼" : "▲") : "·"}
+              </span>
+            </th>
+            <th
+              className="cursor-pointer px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-400 transition-colors hover:text-gray-600"
+              onClick={() => handleSort("win_pct")}
+            >
+              Win%
+              <span className="ml-1 inline-block w-3 text-center">
+                {sortKey === "win_pct" ? (sortDir === "desc" ? "▼" : "▲") : "·"}
+              </span>
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-50">
-          {rows.map((row, idx) => {
-            const wr = row.games_count ? Math.round((row.wins / row.games_count) * 100) : null;
-            const active = filterEco === row.eco && filterColor === row.color;
+          {sortedRows.map((row, idx) => {
+            const wr = row.games_count ? Math.round(openingScorePct(row) * 100) : null;
+            const active = filterEco === row.eco && filterName === (row.opening_name ?? null) && filterColor === row.color;
 
             return (
               <tr
@@ -96,12 +152,14 @@ export function OpeningsAndGames({
   opponentId: string;
 }) {
   const [filterEco, setFilterEco] = useState<string | null>(null);
+  const [filterName, setFilterName] = useState<string | null>(null);
   const [filterColor, setFilterColor] = useState<string | null>(null);
   const [filterLabel, setFilterLabel] = useState<string | null>(null);
 
   function selectOpening(eco: string | null | undefined, name: string | null | undefined, color: string) {
     if (!eco) return;
     setFilterEco(eco);
+    setFilterName(name ?? null);
     setFilterColor(color);
     setFilterLabel(name ?? eco);
     document.getElementById("games-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -120,14 +178,14 @@ export function OpeningsAndGames({
               <span className="inline-block h-3 w-3 rounded-full bg-gray-100 ring-1 ring-gray-400" />
               <span className="text-xs font-medium uppercase tracking-wide text-gray-500">As White</span>
             </div>
-            <OpeningsTable rows={white} filterEco={filterEco} filterColor={filterColor} onSelect={selectOpening} />
+            <OpeningsTable rows={white} filterEco={filterEco} filterName={filterName} filterColor={filterColor} onSelect={selectOpening} />
           </div>
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <span className="inline-block h-3 w-3 rounded-full bg-gray-700" />
               <span className="text-xs font-medium uppercase tracking-wide text-gray-500">As Black</span>
             </div>
-            <OpeningsTable rows={black} filterEco={filterEco} filterColor={filterColor} onSelect={selectOpening} />
+            <OpeningsTable rows={black} filterEco={filterEco} filterName={filterName} filterColor={filterColor} onSelect={selectOpening} />
           </div>
         </div>
       </section>
@@ -141,10 +199,12 @@ export function OpeningsAndGames({
           games={games}
           opponentId={opponentId}
           filterEco={filterEco}
+          filterName={filterName}
           filterLabel={filterLabel}
           filterColor={filterColor}
           onClearFilter={() => {
             setFilterEco(null);
+            setFilterName(null);
             setFilterColor(null);
             setFilterLabel(null);
           }}
