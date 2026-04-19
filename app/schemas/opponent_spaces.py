@@ -8,6 +8,7 @@ class OpponentSpaceCreate(BaseModel):
     display_name: str
     canonical_name: str
     notes: Optional[str] = None
+    profile_data: Optional[dict[str, Any]] = None
 
 
 class OpponentSpaceRead(BaseModel):

@@ -12,6 +12,21 @@ from app.services.engine.stockfish_client import StockfishClient
 logger = logging.getLogger(__name__)
 
 
+def _eval_loss_for_side(side: str, played_eval_cp: Optional[int], best_eval_cp: Optional[int]) -> int:
+    """Return CPL from the moving side's perspective.
+
+    Engine scores are stored from White's perspective, so we compare the
+    position after the played move against the position after the engine's
+    best move, then flip the sign for Black.
+    """
+    played = played_eval_cp or 0
+    best = best_eval_cp or 0
+
+    if side == "white":
+        return max(0, best - played)
+    return max(0, played - best)
+
+
 class AnalysisService:
     def __init__(self, stockfish_client: StockfishClient | None = None):
         self.stockfish_client = stockfish_client or StockfishClient()
@@ -58,7 +73,13 @@ class AnalysisService:
     # Single-game analysis
     # ------------------------------------------------------------------
 
-    def analyze_game(self, db: Session, game_id: str, depth: int = 12) -> int:
+    def analyze_game(
+        self,
+        db: Session,
+        game_id: str,
+        depth: int = 12,
+        max_plies: Optional[int] = None,
+    ) -> int:
         """Analyze every move in *game_id* and (re-)write EngineAnalysis rows.
 
         Returns the number of positions analyzed.  Positions already in the
@@ -77,6 +98,9 @@ class AnalysisService:
             ).all()
         )
 
+        if max_plies is not None:
+            moves = moves[:max_plies]
+
         # Drop stale analysis rows for this game before writing fresh ones
         db.execute(
             select(EngineAnalysis).where(EngineAnalysis.game_id == game_id)
@@ -94,21 +118,22 @@ class AnalysisService:
             eval_after_cp = after["score_cp"]
             best_move_uci = before["best_move_uci"]
 
-            # CPL is always non-negative and from the moving side's perspective
-            if move.side_to_move.value == "white":
-                cpl = max(0, (eval_before_cp or 0) - (eval_after_cp or 0))
-            else:
-                cpl = max(0, (eval_after_cp or 0) - (eval_before_cp or 0))
-
             best_move_san: Optional[str] = None
+            best_eval_after_cp = eval_after_cp
             if best_move_uci:
                 try:
                     board = chess.Board(move.fen_before)
                     best_move_obj = chess.Move.from_uci(best_move_uci)
                     if best_move_obj in board.legal_moves:
                         best_move_san = board.san(best_move_obj)
+                        if best_move_uci != move.uci:
+                            board.push(best_move_obj)
+                            best_after = self.stockfish_client.analyze_position(board.fen(), depth=depth)
+                            best_eval_after_cp = best_after["score_cp"]
                 except Exception:
                     pass
+
+            cpl = _eval_loss_for_side(move.side_to_move.value, eval_after_cp, best_eval_after_cp)
 
             db.add(
                 EngineAnalysis(

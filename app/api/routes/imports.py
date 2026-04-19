@@ -327,10 +327,11 @@ def _bg_store_player_profile(opponent_id: str, display_name: str) -> None:
         opponent = db.get(OpponentSpace, opponent_id)
         if not opponent:
             return
-        profile = build_player_profile(display_name)
+        existing = dict(opponent.profile_data or {})
+        profile = build_player_profile(display_name, fide_id=existing.get("fide_id"))
         if not profile:
             return
-        opponent.profile_data = profile
+        opponent.profile_data = {**existing, **profile}
         db.commit()
     finally:
         db.close()
@@ -403,10 +404,11 @@ def run_onboarding_pipeline(
 
         title_hint: str | None = None
         try:
-            profile = build_player_profile(display_name)
             opponent = db.get(OpponentSpace, opponent_id)
+            existing = dict(opponent.profile_data or {}) if opponent else {}
+            profile = build_player_profile(display_name, fide_id=existing.get("fide_id"))
             if opponent and profile:
-                opponent.profile_data = profile
+                opponent.profile_data = {**existing, **profile}
                 title_hint = (profile.get("title") or "").upper() or None
             if profile_job:
                 profile_job.status = JobStatus.completed

@@ -481,7 +481,7 @@ def search_chesscom(display_name: str, title_hint: Optional[str] = None) -> list
     return []
 
 
-def build_player_profile(display_name: str) -> Optional[dict]:
+def build_player_profile(display_name: str, fide_id: Optional[int] = None) -> Optional[dict]:
     """
     Build a player profile dict from FIDE data only.
     Returns None when no FIDE record is found.
@@ -493,13 +493,15 @@ def build_player_profile(display_name: str) -> Optional[dict]:
     from datetime import date as _date
 
     # 1. FIDE search — get the FIDE ID
-    fide_results = search_fide_players(display_name, max_results=1)
-    if not fide_results:
-        return None
+    fide_results: list[dict] = []
+    if fide_id is None:
+        fide_results = search_fide_players(display_name, max_results=1)
+        if not fide_results:
+            return None
 
-    fide_id = fide_results[0].get("fide_id")
-    if not fide_id:
-        return None
+        fide_id = fide_results[0].get("fide_id")
+        if not fide_id:
+            return None
 
     # 2. FIDE profile page — all data including photo
     profile = _fetch_fide_profile(fide_id)
@@ -507,19 +509,20 @@ def build_player_profile(display_name: str) -> Optional[dict]:
         return None
 
     # Fall back search result fields for anything the profile page missed
-    sr = fide_results[0]
-    if not profile.get("name"):
-        profile["name"] = sr.get("name")
-    if not profile.get("title"):
-        profile["title"] = sr.get("title")
-    if not profile.get("birth_year"):
-        profile["birth_year"] = sr.get("birth_year")
-    if not profile.get("rating_std"):
-        profile["rating_std"] = sr.get("rating_std")
-    if not profile.get("rating_rapid"):
-        profile["rating_rapid"] = sr.get("rating_rapid")
-    if not profile.get("rating_blitz"):
-        profile["rating_blitz"] = sr.get("rating_blitz")
+    if fide_results:
+        sr = fide_results[0]
+        if not profile.get("name"):
+            profile["name"] = sr.get("name")
+        if not profile.get("title"):
+            profile["title"] = sr.get("title")
+        if not profile.get("birth_year"):
+            profile["birth_year"] = sr.get("birth_year")
+        if not profile.get("rating_std"):
+            profile["rating_std"] = sr.get("rating_std")
+        if not profile.get("rating_rapid"):
+            profile["rating_rapid"] = sr.get("rating_rapid")
+        if not profile.get("rating_blitz"):
+            profile["rating_blitz"] = sr.get("rating_blitz")
 
     # Derived
     by = profile.get("birth_year")

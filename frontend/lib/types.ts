@@ -1,5 +1,7 @@
 export type Side = "white" | "black";
 export type Phase = "opening" | "middlegame" | "endgame";
+export type JobType = "fetch_profile" | "import_pgn" | "analyze_games" | "generate_report";
+export type JobStatus = "queued" | "running" | "completed" | "failed";
 
 export interface PlayerProfile {
   photo_url?: string | null;
@@ -177,6 +179,15 @@ export interface Report {
   title: string;
   status: ReportStatus;
   content?: ReportContent | null;
+  created_at: string;
+}
+
+export interface Job {
+  id: string;
+  job_type: JobType;
+  status: JobStatus;
+  payload?: Record<string, unknown> | null;
+  result?: Record<string, unknown> | null;
   created_at: string;
 }
 

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Game, OpeningStat } from "@/lib/types";
 import { GamesTable } from "./GamesTable";
+import { FileTextIcon } from "./Icons";
 
 function OpeningName({ name }: { name: string | null | undefined }) {
   const full = name ?? "";
@@ -30,15 +31,11 @@ function OpeningsTable({
   onSelect: (eco: string | null | undefined, name: string | null | undefined, color: string) => void;
 }) {
   if (rows.length === 0) {
-    return (
-      <div className="rounded-xl border border-gray-200 bg-white px-4 py-6 text-sm text-gray-400">
-        No opening stats yet. Upload PGNs and run analysis.
-      </div>
-    );
+    return <div className="rounded-2xl border border-gray-200 bg-white px-4 py-5 text-sm text-gray-400 shadow-sm">No opening data yet.</div>;
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-gray-100">
@@ -56,9 +53,7 @@ function OpeningsTable({
               <tr
                 key={`${row.opening_name}-${row.color}-${idx}`}
                 onClick={() => (row.eco ? onSelect(row.eco, row.opening_name, row.color) : undefined)}
-                className={`transition-colors ${row.eco ? "cursor-pointer" : ""} ${
-                  active ? "bg-gray-50" : "hover:bg-gray-50/60"
-                }`}
+                className={`transition-colors ${row.eco ? "cursor-pointer" : ""} ${active ? "bg-gray-50" : "hover:bg-gray-50/60"}`}
               >
                 <td className="max-w-xs px-4 py-3">
                   <div className="flex items-start gap-2">
@@ -77,9 +72,7 @@ function OpeningsTable({
                 <td className="px-4 py-3 tabular-nums text-gray-600">{row.games_count}</td>
                 <td className="px-4 py-3 tabular-nums">
                   {wr != null ? (
-                    <span className={wr >= 60 ? "font-medium text-emerald-700" : wr <= 35 ? "text-rose-600" : "text-gray-600"}>
-                      {wr}%
-                    </span>
+                    <span className={wr >= 60 ? "font-medium text-emerald-700" : wr <= 35 ? "text-rose-600" : "text-gray-600"}>{wr}%</span>
                   ) : (
                     "-"
                   )}
@@ -120,8 +113,8 @@ export function OpeningsAndGames({
   return (
     <>
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold text-gray-900">Top openings</h2>
-        <div className="grid grid-cols-2 gap-6">
+        <h2 className="text-sm font-semibold text-gray-900">Openings</h2>
+        <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <span className="inline-block h-3 w-3 rounded-full bg-gray-100 ring-1 ring-gray-400" />
@@ -140,7 +133,10 @@ export function OpeningsAndGames({
       </section>
 
       <section id="games-section" className="space-y-3">
-        <h2 className="text-sm font-semibold text-gray-900">Games</h2>
+        <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-gray-900">
+          <FileTextIcon className="h-4 w-4 text-gray-400" />
+          Games
+        </h2>
         <GamesTable
           games={games}
           opponentId={opponentId}

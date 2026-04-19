@@ -19,6 +19,7 @@ def create_opponent_space(
         display_name=payload.display_name,
         canonical_name=payload.canonical_name,
         notes=payload.notes,
+        profile_data=payload.profile_data,
     )
     db.add(opponent)
     db.commit()

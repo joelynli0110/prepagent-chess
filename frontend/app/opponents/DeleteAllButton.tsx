@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { TrashIcon, XIcon } from "./Icons";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
 
@@ -25,32 +26,36 @@ export function DeleteAllButton() {
     return (
       <button
         type="button"
+        title="Delete all"
         onClick={() => setConfirming(true)}
-        className="rounded-xl border border-red-200 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-red-200 text-red-600 transition-colors hover:bg-red-50"
       >
-        Delete all
+        <TrashIcon className="h-4 w-4" />
+        <span className="sr-only">Delete all</span>
       </button>
     );
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-      <span className="text-sm text-red-800">Delete all opponents and their games?</span>
+    <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-3 py-2.5">
+      <span className="text-sm text-red-800">Delete all opponents?</span>
       <button
         type="button"
         disabled={deleting}
         onClick={handleDeleteAll}
-        className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+        className="rounded-full bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
       >
-        {deleting ? "Deleting…" : "Yes, delete all"}
+        {deleting ? "Deleting..." : "Delete"}
       </button>
       <button
         type="button"
         disabled={deleting}
         onClick={() => setConfirming(false)}
-        className="rounded-xl border px-4 py-2 text-sm hover:bg-white disabled:opacity-50 transition-colors"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-white text-red-500 transition-colors hover:bg-red-100 disabled:opacity-50"
+        title="Cancel"
       >
-        Cancel
+        <XIcon className="h-4 w-4" />
+        <span className="sr-only">Cancel</span>
       </button>
     </div>
   );

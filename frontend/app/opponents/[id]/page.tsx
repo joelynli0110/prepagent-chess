@@ -1,21 +1,13 @@
 import Link from "next/link";
 import { apiGet } from "@/lib/api";
-import { Game, OpeningStat, OpponentSpace } from "@/lib/types";
-import { T } from "@/components/T";
+import { Game, OpeningStat, OpponentSpace, Report } from "@/lib/types";
+import { ArrowLeftIcon } from "./Icons";
 import { DeleteOpponentButton } from "./DeleteOpponentButton";
 import { ImportSection } from "./ImportSection";
-import { OpeningsAndGames } from "./OpeningsAndGames";
+import { OpponentTabs } from "./OpponentTabs";
+import { OpponentAutoRefresh } from "./OpponentAutoRefresh";
 import { PlayerProfileCard } from "./PlayerProfileCard";
-import { ReportSection } from "./ReportSection";
-
-function Section({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <section className="space-y-3">
-      <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
-      {children}
-    </section>
-  );
-}
+import { PrepSnapshotCard } from "./PrepSnapshotCard";
 
 export default async function OpponentDetailPage({
   params,
@@ -27,65 +19,55 @@ export default async function OpponentDetailPage({
   const { id } = await params;
   const { status, message } = await searchParams;
 
-  const [opponent, openings, games] = await Promise.all([
+  const [opponent, openings, games, reports] = await Promise.all([
     apiGet<OpponentSpace>(`/opponents/${id}`),
     apiGet<OpeningStat[]>(`/opponents/${id}/openings`).catch(() => []),
     apiGet<Game[]>(`/opponents/${id}/games`).catch(() => []),
+    apiGet<Report[]>(`/opponents/${id}/reports`).catch(() => []),
   ]);
 
+  const latestReport = reports[0] ?? null;
+  const shouldAutoRefresh = !opponent.profile_data?.photo_url || games.length === 0;
+
   return (
-    <main className="mx-auto max-w-6xl space-y-8 px-6 py-8">
-      <Link
-        href="/opponents"
-        className="inline-flex items-center gap-1 text-sm text-gray-400 transition-colors hover:text-gray-700"
-      >
-        <T k="all_opponents" />
-      </Link>
+    <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
+      <OpponentAutoRefresh opponentId={id} shouldStart={shouldAutoRefresh} />
+
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/opponents"
+            title="Back"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
+          >
+            <ArrowLeftIcon className="h-4 w-4" />
+            <span className="sr-only">Back</span>
+          </Link>
+          <h1 className="text-2xl font-semibold text-gray-900">{opponent.display_name}</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <div id="import-section">
+            <ImportSection opponentId={id} />
+          </div>
+          <DeleteOpponentButton opponentId={id} opponentName={opponent.display_name} />
+        </div>
+      </div>
 
       {message && (
         <div
           className={`rounded-xl border p-4 text-sm ${
-            status === "success"
-              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-              : "border-rose-200 bg-rose-50 text-rose-800"
+            status === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800"
           }`}
         >
           {message}
         </div>
       )}
 
-      <h1 className="text-2xl font-semibold text-gray-900">{opponent.display_name}</h1>
+      <PrepSnapshotCard openings={openings} games={games} latestReport={latestReport} />
 
-      <PlayerProfileCard profile={opponent.profile_data} />
+      <PlayerProfileCard profile={opponent.profile_data} gamesCount={games.length} openingsCount={openings.length} />
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
-            <T k="games" />
-          </div>
-          <div className="mt-1.5 text-2xl font-semibold text-gray-900">{games.length}</div>
-        </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
-            <T k="openings" />
-          </div>
-          <div className="mt-1.5 text-2xl font-semibold text-gray-900">{openings.length}</div>
-        </div>
-      </div>
-
-      <Section title={<T k="import_games" />}>
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <ImportSection opponentId={id} />
-        </div>
-      </Section>
-
-      <OpeningsAndGames openings={openings} games={games} opponentId={id} />
-
-      <ReportSection opponentId={id} />
-
-      <div className="border-t border-gray-100 pt-6">
-        <DeleteOpponentButton opponentId={id} opponentName={opponent.display_name} />
-      </div>
+      <OpponentTabs openings={openings} games={games} opponentId={id} />
     </main>
   );
 }
